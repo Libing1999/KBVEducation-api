@@ -1,0 +1,87 @@
+spring:
+  application:
+    name: kbv-education
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/kbv_education}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: kbv-hikari-pool
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          time_zone: UTC
+    show-sql: false
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+
+  servlet:
+    multipart:
+      max-file-size: ${MAX_FILE_SIZE:25MB}
+      max-request-size: ${MAX_REQUEST_SIZE:150MB}
+
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: /
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: never
+
+# Application-specific configuration
+app:
+  security:
+    jwt:
+      # NOTE: override via env in every non-local environment. Base64 or plain secret >= 32 bytes.
+      secret: ${JWT_SECRET:change-me-please-use-a-long-random-secret-key-32bytes-min}
+      access-token-expiration-ms: ${JWT_ACCESS_EXPIRATION:900000}       # 15 minutes
+      refresh-token-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}  # 7 days
+      issuer: kbv-education
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+    allowed-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
+    allowed-headers: "*"
+    allow-credentials: true
+  admin:
+    # Seeded SUPER_ADMIN account (created at startup if absent). Override in prod.
+    email: ${ADMIN_EMAIL:admin@kbv.edu}
+    password: ${ADMIN_PASSWORD:Admin@12345}
+    first-name: ${ADMIN_FIRST_NAME:Super}
+    last-name: ${ADMIN_LAST_NAME:Admin}
+  storage:
+    # Root directory for uploaded files — keep OUTSIDE the project directory.
+    base-path: ${STORAGE_BASE_PATH:}
+    max-file-size-mb: ${STORAGE_MAX_FILE_SIZE_MB:25}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+logging:
+  level:
+    root: INFO
+    com.kbv.education: DEBUG
+    org.springframework.security: INFO
