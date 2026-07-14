@@ -21,7 +21,9 @@ public final class MimeTypes {
             Map.entry("jpeg", "image/jpeg"),
             Map.entry("png", "image/png"),
             Map.entry("webm", "audio/webm"),
-            Map.entry("m4a", "audio/mp4"));
+            Map.entry("m4a", "audio/mp4"),
+            Map.entry("wav", "audio/wav"),
+            Map.entry("aac", "audio/aac"));
 
     public static String forExtension(String ext) {
         if (ext == null) {

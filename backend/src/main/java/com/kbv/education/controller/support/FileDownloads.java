@@ -16,10 +16,19 @@ public final class FileDownloads {
     }
 
     public static ResponseEntity<Resource> attachment(FileDownloadResult download) {
+        return build(download, "attachment");
+    }
+
+    /** Inline disposition — lets the browser render/play the file (e.g. audio). */
+    public static ResponseEntity<Resource> inline(FileDownloadResult download) {
+        return build(download, "inline");
+    }
+
+    private static ResponseEntity<Resource> build(FileDownloadResult download, String disposition) {
         String encoded = URLEncoder.encode(download.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
         ResponseEntity.BodyBuilder builder = ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + download.fileName() + "\"; filename*=UTF-8''" + encoded)
+                        disposition + "; filename=\"" + download.fileName() + "\"; filename*=UTF-8''" + encoded)
                 .contentType(MediaType.parseMediaType(download.contentType()));
         if (download.size() > 0) {
             builder.contentLength(download.size());

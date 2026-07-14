@@ -12,6 +12,7 @@ import com.kbv.education.entity.QuizAttempt;
 import com.kbv.education.entity.QuizOption;
 import com.kbv.education.entity.QuizQuestion;
 import com.kbv.education.entity.User;
+import com.kbv.education.entity.enums.ActivityType;
 import com.kbv.education.entity.enums.AttemptStatus;
 import com.kbv.education.entity.enums.NotificationType;
 import com.kbv.education.entity.enums.QuestionType;
@@ -26,6 +27,7 @@ import com.kbv.education.repository.QuizRepository;
 import com.kbv.education.repository.StudentCohortRepository;
 import com.kbv.education.repository.UserRepository;
 import com.kbv.education.repository.spec.QuizAttemptSpecifications;
+import com.kbv.education.service.ActivityService;
 import com.kbv.education.service.NotificationService;
 import com.kbv.education.service.QuizAttemptService;
 import com.kbv.education.utils.PageableBuilder;
@@ -60,6 +62,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     private final UserRepository userRepository;
     private final StudentCohortRepository studentCohortRepository;
     private final NotificationService notificationService;
+    private final ActivityService activityService;
 
     @Override
     @Transactional(readOnly = true)
@@ -167,6 +170,9 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
 
         notificationService.notifyAdmins(NotificationType.QUIZ_SUBMITTED, "Quiz Submitted",
                 student.getFullName() + " submitted " + quiz.getTitle(), ReferenceType.QUIZ, quiz.getId());
+
+        activityService.record(userId, ActivityType.QUIZ_COMPLETED, "Quiz completed",
+                quiz.getTitle(), ReferenceType.QUIZ, quiz.getLesson().getId(), java.time.LocalDate.now());
 
         log.info("Student {} submitted quiz {} (score {}/{})", userId, quizId, score, maxScore);
         return new QuizSubmissionResult(

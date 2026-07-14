@@ -9,6 +9,7 @@ import com.kbv.education.entity.HomeworkSubmission;
 import com.kbv.education.entity.HomeworkSubmissionFile;
 import com.kbv.education.entity.Lesson;
 import com.kbv.education.entity.User;
+import com.kbv.education.entity.enums.ActivityType;
 import com.kbv.education.entity.enums.NotificationType;
 import com.kbv.education.entity.enums.ReferenceType;
 import com.kbv.education.entity.enums.RoleType;
@@ -23,6 +24,7 @@ import com.kbv.education.repository.ParentStudentRepository;
 import com.kbv.education.repository.StudentCohortRepository;
 import com.kbv.education.repository.UserRepository;
 import com.kbv.education.repository.spec.HomeworkSubmissionSpecifications;
+import com.kbv.education.service.ActivityService;
 import com.kbv.education.service.HomeworkSubmissionService;
 import com.kbv.education.service.NotificationService;
 import com.kbv.education.service.storage.FileStorageService;
@@ -66,6 +68,7 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
     private final FileStorageService fileStorageService;
     private final FileMapper fileMapper;
     private final NotificationService notificationService;
+    private final ActivityService activityService;
 
     @Override
     @Transactional
@@ -125,6 +128,10 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
         notificationService.notifyAdmins(NotificationType.HOMEWORK_SUBMITTED, "Homework Submitted",
                 student.getFullName() + " submitted homework for " + homework.getLesson().getTitle(),
                 ReferenceType.HOMEWORK, homework.getId());
+
+        activityService.record(userId, ActivityType.HOMEWORK_SUBMITTED, "Homework submitted",
+                homework.getLesson().getTitle(), ReferenceType.HOMEWORK,
+                homework.getLesson().getId(), java.time.LocalDate.now());
 
         log.info("Student {} submitted homework for lesson {}", userId, lessonId);
         return toResponse(saved);

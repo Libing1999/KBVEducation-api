@@ -29,4 +29,6 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
     List<User> findTop5ByDeletedFalseOrderByCreatedAtDesc();
 
     List<User> findByRole_NameAndStatusAndDeletedFalse(RoleType role, com.kbv.education.entity.enums.UserStatus status);
+
+    long countByRole_NameAndStatusAndDeletedFalse(RoleType role, com.kbv.education.entity.enums.UserStatus status);
 }
