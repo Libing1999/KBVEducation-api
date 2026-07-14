@@ -4,11 +4,7 @@ import com.kbv.education.entity.enums.RoleType;
 
 import java.util.List;
 
-/**
- * Student/parent dashboard payload. Scores are dummy values in Phase 1; the
- * shape is designed so real scoring can populate it later without contract
- * changes.
- */
+/** Student/parent dashboard payload: composite score, breakdown, and current tier. */
 public record ScoreDashboardResponse(
         String name,
         RoleType role,

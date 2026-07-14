@@ -2,6 +2,7 @@ package com.kbv.education.repository;
 
 import com.kbv.education.entity.PracticeSession;
 import com.kbv.education.entity.enums.PracticeStatus;
+import com.kbv.education.entity.enums.StudyType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -24,6 +25,9 @@ public interface PracticeSessionRepository extends JpaRepository<PracticeSession
     long countByStudent_IdAndStudyDateBetweenAndDeletedFalse(UUID studentId, LocalDate from, LocalDate to);
 
     long countByStatusAndDeletedFalse(PracticeStatus status);
+
+    // --- Phase 4 scoring: "Full Papers" = approved past-paper sessions ---
+    long countByStudent_IdAndStudyTypeAndStatusAndDeletedFalse(UUID studentId, StudyType studyType, PracticeStatus status);
 
     // --- admin statistics ---
     long countByStudyDateAndDeletedFalse(LocalDate date);

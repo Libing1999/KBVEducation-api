@@ -20,6 +20,7 @@ import com.kbv.education.repository.StudentScoreRepository;
 import com.kbv.education.repository.StudyDayRepository;
 import com.kbv.education.repository.UserRepository;
 import com.kbv.education.service.ScoreEngineService;
+import com.kbv.education.service.TierEngineService;
 import com.kbv.education.utils.PageableBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -56,6 +57,7 @@ public class ScoreEngineServiceImpl implements ScoreEngineService {
     private final StudyDayRepository studyDayRepository;
     private final HomeworkSubmissionRepository homeworkSubmissionRepository;
     private final QuizAttemptRepository quizAttemptRepository;
+    private final TierEngineService tierEngineService;
 
     @Override
     @Transactional
@@ -90,6 +92,8 @@ public class ScoreEngineServiceImpl implements ScoreEngineService {
         score.setTriggerReason(reason);
         score.setCurrent(true);
         StudentScore saved = studentScoreRepository.save(score);
+
+        tierEngineService.recalculateCalculatedTier(studentId);
 
         log.info("Recalculated score for student {} ({}): composite={}", studentId, reason, composite);
         return toResponse(saved);

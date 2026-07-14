@@ -4,6 +4,8 @@ import com.kbv.education.dto.response.AdminDashboardResponse;
 import com.kbv.education.dto.response.CohortResponse;
 import com.kbv.education.dto.response.ScoreDashboardResponse;
 import com.kbv.education.dto.response.UserResponse;
+import com.kbv.education.dto.score.StudentScoreResponse;
+import com.kbv.education.dto.tier.CurrentTierResponse;
 import com.kbv.education.entity.User;
 import com.kbv.education.entity.enums.CohortStatus;
 import com.kbv.education.entity.enums.RoleType;
@@ -17,6 +19,8 @@ import com.kbv.education.repository.StudentCohortRepository;
 import com.kbv.education.repository.UserRepository;
 import com.kbv.education.repository.UserSessionRepository;
 import com.kbv.education.service.DashboardService;
+import com.kbv.education.service.ScoreEngineService;
+import com.kbv.education.service.TierEngineService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +42,8 @@ public class DashboardServiceImpl implements DashboardService {
     private final ParentStudentRepository parentStudentRepository;
     private final UserMapper userMapper;
     private final CohortMapper cohortMapper;
+    private final ScoreEngineService scoreEngineService;
+    private final TierEngineService tierEngineService;
 
     @Override
     @Transactional(readOnly = true)
@@ -81,11 +87,6 @@ public class DashboardServiceImpl implements DashboardService {
         return buildScoreDashboard(student);
     }
 
-    /**
-     * Builds the score dashboard for a student. Scores are deterministic dummy
-     * values in Phase 1 (derived from the id so they are stable per student);
-     * real scoring will populate this shape in a later phase.
-     */
     private ScoreDashboardResponse buildScoreDashboard(User student) {
         ScoreDashboardResponse.CohortInfo cohortInfo = studentCohortRepository
                 .findByStudent_IdAndActiveTrueAndDeletedFalse(student.getId())
@@ -93,13 +94,11 @@ public class DashboardServiceImpl implements DashboardService {
                         sc.getCohort().getName(), sc.getCohort().getStatus().name()))
                 .orElse(null);
 
-        int seed = Math.abs(student.getId().hashCode());
-        double practice = 60 + seed % 40;
-        double reflection = 55 + (seed / 3) % 45;
-        double homework = 65 + (seed / 7) % 35;
-        double quiz = 50 + (seed / 11) % 50;
-        double composite = Math.round((practice + reflection + homework + quiz) / 4.0 * 10) / 10.0;
-        String tier = composite >= 85 ? "Gold" : composite >= 70 ? "Silver" : "Bronze";
+        StudentScoreResponse score = scoreEngineService.getCurrent(student.getId());
+        CurrentTierResponse tier = tierEngineService.getCurrentTier(student.getId());
+        // The confirmed/overridden tier is the official one once an admin has acted on it;
+        // otherwise fall back to the system-calculated tier.
+        String displayTier = tier.confirmedTier() != null ? tier.confirmedTier() : tier.calculatedTier();
 
         List<ScoreDashboardResponse.LessonPlaceholder> lessons = List.of(
                 new ScoreDashboardResponse.LessonPlaceholder("Module 3: Comprehension", "2026-07-15T10:00:00Z"),
@@ -113,12 +112,12 @@ public class DashboardServiceImpl implements DashboardService {
                 student.getFullName(),
                 student.getRole().getName(),
                 cohortInfo,
-                composite,
-                practice,
-                reflection,
-                homework,
-                quiz,
-                tier,
+                score.compositeScore().doubleValue(),
+                score.practicePercentage().doubleValue(),
+                score.reflectionPercentage().doubleValue(),
+                score.homeworkPercentage().doubleValue(),
+                score.quizPercentage().doubleValue(),
+                displayTier,
                 lessons,
                 notifications);
     }

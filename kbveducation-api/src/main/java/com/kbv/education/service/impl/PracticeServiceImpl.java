@@ -30,6 +30,7 @@ import com.kbv.education.repository.spec.PracticeSessionSpecifications;
 import com.kbv.education.service.ActivityService;
 import com.kbv.education.service.NotificationService;
 import com.kbv.education.service.PracticeService;
+import com.kbv.education.service.TierEngineService;
 import com.kbv.education.service.ai.PracticeValidationService;
 import com.kbv.education.service.storage.FileStorageService;
 import com.kbv.education.service.storage.StoredFile;
@@ -75,6 +76,7 @@ public class PracticeServiceImpl implements PracticeService {
     private final PracticeValidationService validationService;
     private final ActivityService activityService;
     private final NotificationService notificationService;
+    private final TierEngineService tierEngineService;
 
     @Override
     @Transactional
@@ -321,6 +323,18 @@ public class PracticeServiceImpl implements PracticeService {
         session.setReviewedAt(Instant.now());
         practiceRepository.save(session);
         notifyStudentOfDecision(session, status == PracticeStatus.APPROVED);
+
+        // Approval/rejection changes the "Full Papers" tier gate for PAST_PAPER sessions even
+        // though it doesn't change Practice %; recalculate the tier only, best-effort.
+        if (session.getStudyType() == StudyType.PAST_PAPER) {
+            try {
+                tierEngineService.recalculateCalculatedTier(session.getStudent().getId());
+            } catch (Exception e) {
+                log.warn("Failed to recalculate tier after practice decision for student {}: {}",
+                        session.getStudent().getId(), e.getMessage());
+            }
+        }
+
         log.info("Admin {} set practice {} to {}", adminId, id, status);
         return toResponse(session);
     }
