@@ -3,11 +3,13 @@ package com.kbv.education.service.impl;
 import com.kbv.education.entity.StudyDay;
 import com.kbv.education.entity.User;
 import com.kbv.education.entity.enums.ScoreAuditEntityType;
+import com.kbv.education.entity.enums.ScoreTriggerReason;
 import com.kbv.education.exception.BusinessRuleException;
 import com.kbv.education.exception.ResourceNotFoundException;
 import com.kbv.education.repository.StudyDayRepository;
 import com.kbv.education.repository.UserRepository;
 import com.kbv.education.service.ScoreAuditLogService;
+import com.kbv.education.service.ScoreEngineService;
 import com.kbv.education.service.StudyDayAdminService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +27,7 @@ public class StudyDayAdminServiceImpl implements StudyDayAdminService {
     private final StudyDayRepository studyDayRepository;
     private final UserRepository userRepository;
     private final ScoreAuditLogService scoreAuditLogService;
+    private final ScoreEngineService scoreEngineService;
 
     @Override
     @Transactional
@@ -49,6 +52,11 @@ public class StudyDayAdminServiceImpl implements StudyDayAdminService {
                 : ScoreAuditEntityType.REFLECTION;
         scoreAuditLogService.record(entityType, day.getId(), day.getStudent().getId(),
                 "STUDY_DAY_VOIDED", null, "voided", reason);
+
+        ScoreTriggerReason scoreTrigger = day.isHasPractice()
+                ? ScoreTriggerReason.PRACTICE_CHANGE
+                : ScoreTriggerReason.REFLECTION_CHANGE;
+        scoreEngineService.recalculate(day.getStudent().getId(), scoreTrigger);
 
         log.info("Voided study day {} by admin {}", studyDayId, adminId);
     }

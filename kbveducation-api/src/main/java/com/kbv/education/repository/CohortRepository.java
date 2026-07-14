@@ -18,4 +18,6 @@ public interface CohortRepository extends JpaRepository<Cohort, UUID>, JpaSpecif
     long countByStatusAndDeletedFalse(CohortStatus status);
 
     List<Cohort> findTop5ByDeletedFalseOrderByCreatedAtDesc();
+
+    List<Cohort> findByStatusAndDeletedFalse(CohortStatus status);
 }

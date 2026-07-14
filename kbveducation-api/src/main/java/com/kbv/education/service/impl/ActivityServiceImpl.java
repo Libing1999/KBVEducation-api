@@ -8,10 +8,12 @@ import com.kbv.education.entity.StudyDay;
 import com.kbv.education.entity.User;
 import com.kbv.education.entity.enums.ActivityType;
 import com.kbv.education.entity.enums.ReferenceType;
+import com.kbv.education.entity.enums.ScoreTriggerReason;
 import com.kbv.education.repository.ActivityLogRepository;
 import com.kbv.education.repository.StudyDayRepository;
 import com.kbv.education.repository.UserRepository;
 import com.kbv.education.service.ActivityService;
+import com.kbv.education.service.ScoreEngineService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -36,6 +38,7 @@ public class ActivityServiceImpl implements ActivityService {
     private final ActivityLogRepository activityLogRepository;
     private final StudyDayRepository studyDayRepository;
     private final UserRepository userRepository;
+    private final ScoreEngineService scoreEngineService;
 
     /**
      * Best-effort recording, isolated in its own transaction so a failure here
@@ -70,14 +73,30 @@ public class ActivityServiceImpl implements ActivityService {
                             d.setStudyDate(date);
                             return d;
                         });
-                switch (type) {
-                    case REFLECTION_SUBMITTED -> day.setHasReflection(true);
-                    case PRACTICE_LOGGED -> day.setHasPractice(true);
-                    case HOMEWORK_SUBMITTED -> day.setHasHomework(true);
-                    case QUIZ_COMPLETED -> day.setHasQuiz(true);
-                    default -> { /* review events don't mark a study day */ }
-                }
+                ScoreTriggerReason scoreTrigger = switch (type) {
+                    case REFLECTION_SUBMITTED -> {
+                        day.setHasReflection(true);
+                        yield ScoreTriggerReason.REFLECTION_CHANGE;
+                    }
+                    case PRACTICE_LOGGED -> {
+                        day.setHasPractice(true);
+                        yield ScoreTriggerReason.PRACTICE_CHANGE;
+                    }
+                    case HOMEWORK_SUBMITTED -> {
+                        day.setHasHomework(true);
+                        yield ScoreTriggerReason.HOMEWORK_CHANGE;
+                    }
+                    case QUIZ_COMPLETED -> {
+                        day.setHasQuiz(true);
+                        yield ScoreTriggerReason.QUIZ_CHANGE;
+                    }
+                    default -> null; // review events don't mark a study day or affect scoring
+                };
                 studyDayRepository.save(day);
+
+                if (scoreTrigger != null) {
+                    scoreEngineService.recalculate(studentId, scoreTrigger);
+                }
             }
         } catch (Exception e) {
             log.warn("Failed to record activity {} for student {}: {}", type, studentId, e.getMessage());

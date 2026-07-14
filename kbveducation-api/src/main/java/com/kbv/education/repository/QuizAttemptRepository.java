@@ -1,6 +1,7 @@
 package com.kbv.education.repository;
 
 import com.kbv.education.entity.QuizAttempt;
+import com.kbv.education.entity.enums.AttemptStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -15,6 +16,9 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, UUID>,
         JpaSpecificationExecutor<QuizAttempt> {
 
     Optional<QuizAttempt> findByQuiz_IdAndStudent_IdAndDeletedFalse(UUID quizId, UUID studentId);
+
+    // --- Phase 4 scoring: quiz percentage = average % of completed attempts ---
+    List<QuizAttempt> findByStudent_IdAndStatusAndDeletedFalse(UUID studentId, AttemptStatus status);
 
     boolean existsByQuiz_IdAndStudent_IdAndDeletedFalse(UUID quizId, UUID studentId);
 

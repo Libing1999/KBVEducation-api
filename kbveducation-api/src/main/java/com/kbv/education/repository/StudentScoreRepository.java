@@ -4,6 +4,9 @@ import com.kbv.education.entity.StudentScore;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -18,4 +21,15 @@ public interface StudentScoreRepository extends JpaRepository<StudentScore, UUID
     List<StudentScore> findByCohort_IdAndCurrentTrueAndDeletedFalse(UUID cohortId);
 
     List<StudentScore> findByCurrentTrueAndDeletedFalse();
+
+    /**
+     * Bulk-clears the current-row flag for a student, executed and flushed
+     * immediately (rather than via entity save) so it lands before the new
+     * current row is inserted — Hibernate always flushes INSERTs before
+     * UPDATEs within one flush, which would otherwise trip the partial
+     * unique index on (student_id) WHERE is_current.
+     */
+    @Modifying
+    @Query("update StudentScore s set s.current = false where s.student.id = :studentId and s.current = true")
+    void clearCurrent(@Param("studentId") UUID studentId);
 }

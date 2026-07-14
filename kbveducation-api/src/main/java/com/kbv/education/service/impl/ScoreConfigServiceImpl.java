@@ -7,10 +7,12 @@ import com.kbv.education.entity.ScoreConfig;
 import com.kbv.education.entity.enums.ScoreAuditEntityType;
 import com.kbv.education.exception.BusinessRuleException;
 import com.kbv.education.exception.ResourceNotFoundException;
+import com.kbv.education.entity.enums.ScoreTriggerReason;
 import com.kbv.education.mapper.ScoreConfigMapper;
 import com.kbv.education.repository.ScoreConfigRepository;
 import com.kbv.education.service.ScoreAuditLogService;
 import com.kbv.education.service.ScoreConfigService;
+import com.kbv.education.service.ScoreEngineService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,7 @@ public class ScoreConfigServiceImpl implements ScoreConfigService {
     private final ScoreConfigRepository scoreConfigRepository;
     private final ScoreConfigMapper scoreConfigMapper;
     private final ScoreAuditLogService scoreAuditLogService;
+    private final ScoreEngineService scoreEngineService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -64,6 +67,8 @@ public class ScoreConfigServiceImpl implements ScoreConfigService {
 
         scoreAuditLogService.record(ScoreAuditEntityType.SCORE_CONFIG, saved.getId(), null,
                 "WEIGHT_CHANGED", previousJson, toJson(response), null);
+
+        scoreEngineService.recalculateAll(ScoreTriggerReason.CONFIG_CHANGE);
 
         log.info("Updated score config {}", saved.getId());
         return response;
