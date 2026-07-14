@@ -5,7 +5,6 @@ import com.kbv.education.dto.response.CohortResponse;
 import com.kbv.education.dto.response.ScoreDashboardResponse;
 import com.kbv.education.dto.response.UserResponse;
 import com.kbv.education.dto.score.StudentScoreResponse;
-import com.kbv.education.dto.tier.CurrentTierResponse;
 import com.kbv.education.entity.User;
 import com.kbv.education.entity.enums.CohortStatus;
 import com.kbv.education.entity.enums.RoleType;
@@ -95,10 +94,7 @@ public class DashboardServiceImpl implements DashboardService {
                 .orElse(null);
 
         StudentScoreResponse score = scoreEngineService.getCurrent(student.getId());
-        CurrentTierResponse tier = tierEngineService.getCurrentTier(student.getId());
-        // The confirmed/overridden tier is the official one once an admin has acted on it;
-        // otherwise fall back to the system-calculated tier.
-        String displayTier = tier.confirmedTier() != null ? tier.confirmedTier() : tier.calculatedTier();
+        String displayTier = tierEngineService.getDisplayTier(student.getId());
 
         List<ScoreDashboardResponse.LessonPlaceholder> lessons = List.of(
                 new ScoreDashboardResponse.LessonPlaceholder("Module 3: Comprehension", "2026-07-15T10:00:00Z"),

@@ -21,4 +21,10 @@ public interface TierEngineService {
     TierHistoryResponse override(UUID studentId, String tierName, String reason, UUID adminId);
 
     PageResponse<TierHistoryResponse> history(UUID studentId, int page, int size);
+
+    /** The tier to display for a student: confirmed/overridden if set, else the system-calculated tier. */
+    default String getDisplayTier(UUID studentId) {
+        CurrentTierResponse tier = getCurrentTier(studentId);
+        return tier.confirmedTier() != null ? tier.confirmedTier() : tier.calculatedTier();
+    }
 }

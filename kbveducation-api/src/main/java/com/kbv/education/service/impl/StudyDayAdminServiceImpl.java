@@ -8,6 +8,7 @@ import com.kbv.education.exception.BusinessRuleException;
 import com.kbv.education.exception.ResourceNotFoundException;
 import com.kbv.education.repository.StudyDayRepository;
 import com.kbv.education.repository.UserRepository;
+import com.kbv.education.service.LeaderboardService;
 import com.kbv.education.service.ScoreAuditLogService;
 import com.kbv.education.service.ScoreEngineService;
 import com.kbv.education.service.StudyDayAdminService;
@@ -28,6 +29,7 @@ public class StudyDayAdminServiceImpl implements StudyDayAdminService {
     private final UserRepository userRepository;
     private final ScoreAuditLogService scoreAuditLogService;
     private final ScoreEngineService scoreEngineService;
+    private final LeaderboardService leaderboardService;
 
     @Override
     @Transactional
@@ -57,6 +59,7 @@ public class StudyDayAdminServiceImpl implements StudyDayAdminService {
                 ? ScoreTriggerReason.PRACTICE_CHANGE
                 : ScoreTriggerReason.REFLECTION_CHANGE;
         scoreEngineService.recalculate(day.getStudent().getId(), scoreTrigger);
+        leaderboardService.regenerateForStudent(day.getStudent().getId());
 
         log.info("Voided study day {} by admin {}", studyDayId, adminId);
     }

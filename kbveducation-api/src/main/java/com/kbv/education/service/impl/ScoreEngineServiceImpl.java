@@ -19,6 +19,7 @@ import com.kbv.education.repository.StudentCohortRepository;
 import com.kbv.education.repository.StudentScoreRepository;
 import com.kbv.education.repository.StudyDayRepository;
 import com.kbv.education.repository.UserRepository;
+import com.kbv.education.service.LeaderboardService;
 import com.kbv.education.service.ScoreEngineService;
 import com.kbv.education.service.TierEngineService;
 import com.kbv.education.utils.PageableBuilder;
@@ -58,6 +59,7 @@ public class ScoreEngineServiceImpl implements ScoreEngineService {
     private final HomeworkSubmissionRepository homeworkSubmissionRepository;
     private final QuizAttemptRepository quizAttemptRepository;
     private final TierEngineService tierEngineService;
+    private final LeaderboardService leaderboardService;
 
     @Override
     @Transactional
@@ -104,6 +106,9 @@ public class ScoreEngineServiceImpl implements ScoreEngineService {
     public void recalculateForCohort(UUID cohortId, ScoreTriggerReason reason) {
         studentCohortRepository.findByCohort_IdAndActiveTrueAndDeletedFalse(cohortId)
                 .forEach(sc -> recalculate(sc.getStudent().getId(), reason));
+        // Regenerated once for the whole cohort here, not inside recalculate() itself, so a
+        // cohort-wide recalc (e.g. a config change) doesn't rebuild the leaderboard N times.
+        leaderboardService.regenerate(cohortId);
     }
 
     @Override

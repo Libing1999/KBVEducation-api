@@ -13,6 +13,7 @@ import com.kbv.education.repository.ActivityLogRepository;
 import com.kbv.education.repository.StudyDayRepository;
 import com.kbv.education.repository.UserRepository;
 import com.kbv.education.service.ActivityService;
+import com.kbv.education.service.LeaderboardService;
 import com.kbv.education.service.ScoreEngineService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +40,7 @@ public class ActivityServiceImpl implements ActivityService {
     private final StudyDayRepository studyDayRepository;
     private final UserRepository userRepository;
     private final ScoreEngineService scoreEngineService;
+    private final LeaderboardService leaderboardService;
 
     /**
      * Best-effort recording, isolated in its own transaction so a failure here
@@ -96,6 +98,7 @@ public class ActivityServiceImpl implements ActivityService {
 
                 if (scoreTrigger != null) {
                     scoreEngineService.recalculate(studentId, scoreTrigger);
+                    leaderboardService.regenerateForStudent(studentId);
                 }
             }
         } catch (Exception e) {
