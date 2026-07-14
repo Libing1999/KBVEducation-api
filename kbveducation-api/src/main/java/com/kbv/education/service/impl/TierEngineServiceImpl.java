@@ -97,8 +97,12 @@ public class TierEngineServiceImpl implements TierEngineService {
         boolean isOverride = confirmedRow.map(TierHistory::isOverride).orElse(false);
 
         List<TierRule> rules = tierRuleRepository.findByActiveTrueAndDeletedFalseOrderByTierRankAsc();
+        // "Next tier" is relative to the tier actually shown to the student (confirmed/overridden
+        // if set, else calculated) - the same precedence used everywhere else (getDisplayTier()) -
+        // not always the raw calculated tier, which would be wrong after an upward override.
+        String displayTierName = confirmedTier != null ? confirmedTier : latest.getCalculatedTier();
         TierRule currentRule = rules.stream()
-                .filter(r -> r.getTierName().equals(latest.getCalculatedTier()))
+                .filter(r -> r.getTierName().equals(displayTierName))
                 .findFirst()
                 .orElse(null);
         TierRule nextRule = currentRule == null ? null : rules.stream()
