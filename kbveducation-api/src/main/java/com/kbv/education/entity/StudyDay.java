@@ -10,6 +10,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.Instant;
 import java.time.LocalDate;
 
 /**
@@ -41,4 +42,17 @@ public class StudyDay extends BaseEntity {
 
     @Column(name = "has_quiz", nullable = false)
     private boolean hasQuiz = false;
+
+    @Column(name = "is_voided", nullable = false)
+    private boolean voided = false;
+
+    @Column(name = "voided_reason", columnDefinition = "text")
+    private String voidedReason;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "voided_by")
+    private User voidedBy;
+
+    @Column(name = "voided_at")
+    private Instant voidedAt;
 }

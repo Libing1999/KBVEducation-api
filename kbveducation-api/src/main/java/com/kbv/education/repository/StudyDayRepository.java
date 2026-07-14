@@ -12,8 +12,21 @@ public interface StudyDayRepository extends JpaRepository<StudyDay, UUID> {
 
     Optional<StudyDay> findByStudent_IdAndStudyDateAndDeletedFalse(UUID studentId, LocalDate studyDate);
 
+    Optional<StudyDay> findByIdAndDeletedFalse(UUID id);
+
     List<StudyDay> findByStudent_IdAndStudyDateBetweenAndDeletedFalseOrderByStudyDateAsc(
             UUID studentId, LocalDate from, LocalDate to);
 
     long countByStudent_IdAndDeletedFalse(UUID studentId);
+
+    // --- Phase 4 scoring: voided-day-aware counts over a window ---
+
+    long countByStudent_IdAndVoidedTrueAndStudyDateBetweenAndDeletedFalse(
+            UUID studentId, LocalDate from, LocalDate to);
+
+    long countByStudent_IdAndHasPracticeTrueAndVoidedFalseAndStudyDateBetweenAndDeletedFalse(
+            UUID studentId, LocalDate from, LocalDate to);
+
+    long countByStudent_IdAndHasReflectionTrueAndVoidedFalseAndStudyDateBetweenAndDeletedFalse(
+            UUID studentId, LocalDate from, LocalDate to);
 }
