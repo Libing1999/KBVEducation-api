@@ -15,6 +15,7 @@ import com.kbv.education.repository.LeaderboardSnapshotRepository;
 import com.kbv.education.repository.ScoreConfigRepository;
 import com.kbv.education.repository.StudentCohortRepository;
 import com.kbv.education.repository.StudentScoreRepository;
+import com.kbv.education.service.AnalyticsService;
 import com.kbv.education.service.LeaderboardService;
 import com.kbv.education.service.TierEngineService;
 import com.kbv.education.utils.PageableBuilder;
@@ -47,10 +48,15 @@ public class LeaderboardServiceImpl implements LeaderboardService {
     private final LeaderboardSnapshotRepository leaderboardSnapshotRepository;
     private final ScoreConfigRepository scoreConfigRepository;
     private final TierEngineService tierEngineService;
+    private final AnalyticsService analyticsService;
 
     @Override
     @Transactional
     public void regenerate(UUID cohortId) {
+        // Analytics is a separate, independently-toggled feature (dashboardWidgetsEnabled, not
+        // leaderboardEnabled), so it refreshes regardless of whether the leaderboard itself is on.
+        analyticsService.refresh(cohortId);
+
         ScoreConfig config = activeConfig();
         if (!config.isLeaderboardEnabled()) {
             log.debug("Leaderboard disabled; skipping regeneration for cohort {}", cohortId);

@@ -29,4 +29,12 @@ public interface StudyDayRepository extends JpaRepository<StudyDay, UUID> {
 
     long countByStudent_IdAndHasReflectionTrueAndVoidedFalseAndStudyDateBetweenAndDeletedFalse(
             UUID studentId, LocalDate from, LocalDate to);
+
+    // --- Phase 4 analytics: activity counts include voided days (voiding excludes a day from
+    // scoring, not from the fact that the student did something) ---
+    long countByStudent_IdAndHasPracticeTrueAndStudyDateBetweenAndDeletedFalse(
+            UUID studentId, LocalDate from, LocalDate to);
+
+    long countByStudent_IdAndHasReflectionTrueAndStudyDateBetweenAndDeletedFalse(
+            UUID studentId, LocalDate from, LocalDate to);
 }
