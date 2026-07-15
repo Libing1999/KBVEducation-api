@@ -1,17 +1,22 @@
 package com.kbv.education.service.impl;
 
 import com.kbv.education.dto.analytics.AdminAnalyticsResponse;
+import com.kbv.education.dto.analytics.StudentTrendResponse;
+import com.kbv.education.dto.analytics.TrendPointResponse;
 import com.kbv.education.entity.Cohort;
 import com.kbv.education.entity.DashboardMetric;
 import com.kbv.education.entity.StudentScore;
 import com.kbv.education.entity.TierRule;
+import com.kbv.education.entity.User;
 import com.kbv.education.entity.enums.DashboardMetricKey;
+import com.kbv.education.entity.enums.LeaderboardSortField;
 import com.kbv.education.exception.ResourceNotFoundException;
 import com.kbv.education.repository.CohortRepository;
 import com.kbv.education.repository.DashboardMetricRepository;
 import com.kbv.education.repository.StudentScoreRepository;
 import com.kbv.education.repository.StudyDayRepository;
 import com.kbv.education.repository.TierRuleRepository;
+import com.kbv.education.repository.UserRepository;
 import com.kbv.education.service.AnalyticsService;
 import com.kbv.education.service.TierEngineService;
 import lombok.RequiredArgsConstructor;
@@ -23,12 +28,15 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -50,6 +58,7 @@ public class AnalyticsServiceImpl implements AnalyticsService {
     private final TierRuleRepository tierRuleRepository;
     private final StudyDayRepository studyDayRepository;
     private final TierEngineService tierEngineService;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional
@@ -164,6 +173,48 @@ public class AnalyticsServiceImpl implements AnalyticsService {
                 computedAt);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<TrendPointResponse> trend(UUID cohortId, LeaderboardSortField metric, int days) {
+        Instant from = windowStart(days);
+        List<StudentScore> scores = cohortId != null
+                ? studentScoreRepository.findByCohort_IdAndCreatedAtAfterAndDeletedFalse(cohortId, from)
+                : studentScoreRepository.findByCreatedAtAfterAndDeletedFalse(from);
+
+        // Bucketed by the day each contributing recalculation happened, not a point-in-time
+        // reconstruction for every calendar day - see the class javadoc's WEEKLY/MONTHLY note
+        // for why: simpler, and still a genuinely meaningful trend of active-student activity.
+        Map<LocalDate, List<BigDecimal>> byDate = new TreeMap<>();
+        for (StudentScore score : scores) {
+            LocalDate date = score.getCreatedAt().atZone(ZoneOffset.UTC).toLocalDate();
+            byDate.computeIfAbsent(date, d -> new ArrayList<>()).add(valueFor(score, metric));
+        }
+
+        return byDate.entrySet().stream()
+                .map(e -> new TrendPointResponse(e.getKey(), averageValues(e.getValue())))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<StudentTrendResponse> studentTrend(List<UUID> studentIds, int days) {
+        Instant from = windowStart(days);
+        List<StudentTrendResponse> result = new ArrayList<>();
+        for (UUID studentId : studentIds) {
+            User student = userRepository.findByIdAndDeletedFalse(studentId).orElse(null);
+            if (student == null) {
+                continue;
+            }
+            List<TrendPointResponse> points = studentScoreRepository
+                    .findByStudent_IdAndCreatedAtAfterAndDeletedFalseOrderByCreatedAtAsc(studentId, from).stream()
+                    .map(s -> new TrendPointResponse(
+                            s.getCreatedAt().atZone(ZoneOffset.UTC).toLocalDate(), s.getCompositeScore()))
+                    .toList();
+            result.add(new StudentTrendResponse(studentId, student.getFullName(), points));
+        }
+        return result;
+    }
+
     // --- helpers -------------------------------------------------------
 
     private List<DashboardMetric> loadMetrics(UUID cohortId) {
@@ -183,11 +234,29 @@ public class AnalyticsServiceImpl implements AnalyticsService {
     }
 
     private BigDecimal average(List<StudentScore> scores, Function<StudentScore, BigDecimal> extractor) {
-        if (scores.isEmpty()) {
+        return averageValues(scores.stream().map(extractor).toList());
+    }
+
+    private BigDecimal averageValues(List<BigDecimal> values) {
+        if (values.isEmpty()) {
             return BigDecimal.ZERO;
         }
-        BigDecimal sum = scores.stream().map(extractor).reduce(BigDecimal.ZERO, BigDecimal::add);
-        return sum.divide(BigDecimal.valueOf(scores.size()), 2, RoundingMode.HALF_UP);
+        BigDecimal sum = values.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        return sum.divide(BigDecimal.valueOf(values.size()), 2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal valueFor(StudentScore score, LeaderboardSortField metric) {
+        return switch (metric) {
+            case COMPOSITE -> score.getCompositeScore();
+            case PRACTICE -> score.getPracticePercentage();
+            case QUIZ -> score.getQuizPercentage();
+            case REFLECTION -> score.getReflectionPercentage();
+            case HOMEWORK -> score.getHomeworkPercentage();
+        };
+    }
+
+    private Instant windowStart(int days) {
+        return LocalDate.now().minusDays(Math.max(days, 1) - 1L).atStartOfDay(ZoneOffset.UTC).toInstant();
     }
 
     private BigDecimal extreme(List<StudentScore> scores, Function<StudentScore, BigDecimal> extractor, boolean max) {

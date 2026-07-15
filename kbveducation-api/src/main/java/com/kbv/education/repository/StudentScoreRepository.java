@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,6 +22,13 @@ public interface StudentScoreRepository extends JpaRepository<StudentScore, UUID
     List<StudentScore> findByCohort_IdAndCurrentTrueAndDeletedFalse(UUID cohortId);
 
     List<StudentScore> findByCurrentTrueAndDeletedFalse();
+
+    // --- Phase 4 trend charts: every recalculation in the window, not just the current row ---
+    List<StudentScore> findByCohort_IdAndCreatedAtAfterAndDeletedFalse(UUID cohortId, Instant from);
+
+    List<StudentScore> findByCreatedAtAfterAndDeletedFalse(Instant from);
+
+    List<StudentScore> findByStudent_IdAndCreatedAtAfterAndDeletedFalseOrderByCreatedAtAsc(UUID studentId, Instant from);
 
     /**
      * Bulk-clears the current-row flag for a student, executed and flushed
