@@ -18,6 +18,12 @@ public interface FileStorageService {
      */
     StoredFile store(MultipartFile file, String subDir);
 
+    /**
+     * Persist server-generated content (e.g. a rendered PDF) into the given
+     * sub-directory, generating a unique on-disk name.
+     */
+    StoredFile store(byte[] content, String originalName, String contentType, String subDir);
+
     /** Load a previously stored file as a downloadable resource. */
     Resource loadAsResource(String subDir, String storedName);
 

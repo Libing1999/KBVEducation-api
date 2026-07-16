@@ -21,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -57,22 +58,9 @@ public class FileStorageServiceImpl implements FileStorageService {
             throw new BadRequestException("Uploaded file is empty");
         }
 
-        Path dir = resolveDir(subDir);
-        try {
-            Files.createDirectories(dir);
-        } catch (IOException e) {
-            throw new ApiException(ErrorCode.INTERNAL_ERROR, "Could not create storage sub-directory");
-        }
-
         String original = StringUtils.cleanPath(
                 file.getOriginalFilename() == null ? "file" : file.getOriginalFilename());
-        String ext = StringUtils.getFilenameExtension(original);
-        String storedName = UUID.randomUUID() + (ext != null ? "." + ext.toLowerCase(Locale.ROOT) : "");
-
-        Path target = dir.resolve(storedName).normalize();
-        if (!target.startsWith(dir)) {
-            throw new BadRequestException("Invalid file path");
-        }
+        Path target = prepareTarget(original, subDir);
 
         try (InputStream in = file.getInputStream()) {
             Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
@@ -80,7 +68,43 @@ public class FileStorageServiceImpl implements FileStorageService {
             throw new ApiException(ErrorCode.INTERNAL_ERROR, "Failed to store file");
         }
 
-        return new StoredFile(storedName, original, file.getContentType(), file.getSize());
+        return new StoredFile(target.getFileName().toString(), original, file.getContentType(), file.getSize());
+    }
+
+    @Override
+    public StoredFile store(byte[] content, String originalName, String contentType, String subDir) {
+        if (content == null || content.length == 0) {
+            throw new BadRequestException("Generated file content is empty");
+        }
+
+        String original = StringUtils.cleanPath(originalName == null ? "file" : originalName);
+        Path target = prepareTarget(original, subDir);
+
+        try {
+            Files.write(target, content, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException e) {
+            throw new ApiException(ErrorCode.INTERNAL_ERROR, "Failed to store file");
+        }
+
+        return new StoredFile(target.getFileName().toString(), original, contentType, content.length);
+    }
+
+    private Path prepareTarget(String originalName, String subDir) {
+        Path dir = resolveDir(subDir);
+        try {
+            Files.createDirectories(dir);
+        } catch (IOException e) {
+            throw new ApiException(ErrorCode.INTERNAL_ERROR, "Could not create storage sub-directory");
+        }
+
+        String ext = StringUtils.getFilenameExtension(originalName);
+        String storedName = UUID.randomUUID() + (ext != null ? "." + ext.toLowerCase(Locale.ROOT) : "");
+
+        Path target = dir.resolve(storedName).normalize();
+        if (!target.startsWith(dir)) {
+            throw new BadRequestException("Invalid file path");
+        }
+        return target;
     }
 
     @Override
