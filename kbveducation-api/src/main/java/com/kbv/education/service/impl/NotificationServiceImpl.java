@@ -70,6 +70,16 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     @Transactional
+    public void delete(UUID userId, UUID notificationId) {
+        Notification notification = notificationRepository
+                .findByIdAndRecipient_IdAndDeletedFalse(notificationId, userId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Notification", notificationId));
+        notification.setDeleted(true);
+        notificationRepository.save(notification);
+    }
+
+    @Override
+    @Transactional
     public void notify(UUID recipientId, NotificationType type, String title, String message,
                        ReferenceType referenceType, UUID referenceId) {
         Notification notification = new Notification();

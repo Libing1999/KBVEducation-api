@@ -18,6 +18,9 @@ public interface NotificationService {
 
     void markAllRead(UUID userId);
 
+    /** Soft-deletes one of the caller's own notifications. */
+    void delete(UUID userId, UUID notificationId);
+
     /** Create and persist a notification for a recipient. */
     void notify(UUID recipientId, NotificationType type, String title, String message,
                 ReferenceType referenceType, UUID referenceId);

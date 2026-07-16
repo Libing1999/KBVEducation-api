@@ -1,5 +1,6 @@
 package com.kbv.education.service.impl;
 
+import com.kbv.education.audit.Audited;
 import com.kbv.education.dto.dashboard.ProgressMetrics;
 import com.kbv.education.dto.dashboard.StudentProgressResponse;
 import com.kbv.education.dto.export.ExportFormat;
@@ -51,6 +52,7 @@ public class ExportServiceImpl implements ExportService {
 
     @Override
     @Transactional
+    @Audited(action = "EXPORT_GENERATED", entityType = "EXPORT")
     public FileDownloadResult exportLeaderboard(UUID cohortId, LeaderboardSortField sortBy, ExportFormat format) {
         Cohort cohort = requireCohort(cohortId);
         LeaderboardSortField effectiveSort = sortBy != null ? sortBy : activeConfig().getLeaderboardSortBy();
@@ -78,6 +80,7 @@ public class ExportServiceImpl implements ExportService {
 
     @Override
     @Transactional
+    @Audited(action = "EXPORT_GENERATED", entityType = "EXPORT")
     public FileDownloadResult exportScores(UUID cohortId, ExportFormat format) {
         Cohort cohort = requireCohort(cohortId);
         List<StudentScore> scores = studentScoreRepository.findByCohort_IdAndCurrentTrueAndDeletedFalse(cohortId);
@@ -107,6 +110,7 @@ public class ExportServiceImpl implements ExportService {
 
     @Override
     @Transactional
+    @Audited(action = "EXPORT_GENERATED", entityType = "EXPORT")
     public FileDownloadResult exportTiers(UUID cohortId, ExportFormat format) {
         Cohort cohort = requireCohort(cohortId);
         List<StudentCohort> members = studentCohortRepository.findByCohort_IdAndActiveTrueAndDeletedFalse(cohortId);
@@ -136,6 +140,7 @@ public class ExportServiceImpl implements ExportService {
 
     @Override
     @Transactional
+    @Audited(action = "EXPORT_GENERATED", entityType = "EXPORT")
     public FileDownloadResult exportStudentProgress(UUID studentId, ExportFormat format) {
         StudentProgressResponse progress = progressService.getProgressForStudent(studentId);
 

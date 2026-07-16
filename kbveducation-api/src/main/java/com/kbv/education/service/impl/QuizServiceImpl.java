@@ -1,5 +1,6 @@
 package com.kbv.education.service.impl;
 
+import com.kbv.education.audit.Audited;
 import com.kbv.education.dto.common.ReorderRequest;
 import com.kbv.education.dto.quiz.OptionRequest;
 import com.kbv.education.dto.quiz.OptionResponse;
@@ -60,6 +61,7 @@ public class QuizServiceImpl implements QuizService {
 
     @Override
     @Transactional
+    @Audited(action = "QUIZ_EDITED", entityType = "QUIZ")
     public QuizResponse createOrUpdateForLesson(UUID lessonId, QuizRequest request) {
         Lesson lesson = lessonRepository.findByIdAndDeletedFalse(lessonId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Lesson", lessonId));

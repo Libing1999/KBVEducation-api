@@ -1,5 +1,6 @@
 package com.kbv.education.service.impl;
 
+import com.kbv.education.audit.Audited;
 import com.kbv.education.dto.homework.HomeworkRequest;
 import com.kbv.education.dto.homework.HomeworkResponse;
 import com.kbv.education.entity.Homework;
@@ -57,6 +58,7 @@ public class HomeworkServiceImpl implements HomeworkService {
 
     @Override
     @Transactional
+    @Audited(action = "HOMEWORK_DELETED", entityType = "HOMEWORK")
     public void delete(UUID homeworkId) {
         Homework homework = homeworkRepository.findByIdAndDeletedFalse(homeworkId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Homework", homeworkId));

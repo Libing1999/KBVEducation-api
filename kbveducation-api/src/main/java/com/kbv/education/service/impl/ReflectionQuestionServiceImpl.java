@@ -1,5 +1,6 @@
 package com.kbv.education.service.impl;
 
+import com.kbv.education.audit.Audited;
 import com.kbv.education.dto.common.ReorderRequest;
 import com.kbv.education.dto.reflection.ReflectionQuestionRequest;
 import com.kbv.education.dto.reflection.ReflectionQuestionResponse;
@@ -52,6 +53,7 @@ public class ReflectionQuestionServiceImpl implements ReflectionQuestionService 
 
     @Override
     @Transactional
+    @Audited(action = "REFLECTION_EDITED", entityType = "REFLECTION_QUESTION")
     public ReflectionQuestionResponse update(UUID id, ReflectionQuestionRequest request) {
         ReflectionQuestion q = load(id);
         q.setQuestionText(request.questionText().trim());

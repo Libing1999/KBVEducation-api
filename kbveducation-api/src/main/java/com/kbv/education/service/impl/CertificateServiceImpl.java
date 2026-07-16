@@ -1,5 +1,6 @@
 package com.kbv.education.service.impl;
 
+import com.kbv.education.audit.Audited;
 import com.kbv.education.dto.certificate.CertificateResponse;
 import com.kbv.education.dto.file.FileDownloadResult;
 import com.kbv.education.entity.Certificate;
@@ -56,6 +57,7 @@ public class CertificateServiceImpl implements CertificateService {
 
     @Override
     @Transactional
+    @Audited(action = "CERTIFICATE_GENERATED", entityType = "CERTIFICATE")
     public CertificateResponse generate(UUID studentId, CertificateType certificateType) {
         User student = userRepository.findByIdAndDeletedFalse(studentId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Student", studentId));

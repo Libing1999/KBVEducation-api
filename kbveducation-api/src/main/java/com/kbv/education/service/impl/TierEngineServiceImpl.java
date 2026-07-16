@@ -1,5 +1,6 @@
 package com.kbv.education.service.impl;
 
+import com.kbv.education.audit.Audited;
 import com.kbv.education.dto.response.PageResponse;
 import com.kbv.education.dto.tier.CurrentTierResponse;
 import com.kbv.education.dto.tier.TierHistoryResponse;
@@ -159,6 +160,7 @@ public class TierEngineServiceImpl implements TierEngineService {
 
     @Override
     @Transactional
+    @Audited(action = "TIER_OVERRIDDEN", entityType = "TIER")
     public TierHistoryResponse override(UUID studentId, String tierName, String reason, UUID adminId) {
         User student = userRepository.findByIdAndDeletedFalse(studentId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Student", studentId));

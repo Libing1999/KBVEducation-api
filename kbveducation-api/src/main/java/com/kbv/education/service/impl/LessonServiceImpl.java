@@ -1,5 +1,6 @@
 package com.kbv.education.service.impl;
 
+import com.kbv.education.audit.Audited;
 import com.kbv.education.dto.common.ReorderRequest;
 import com.kbv.education.dto.lesson.CreateLessonRequest;
 import com.kbv.education.dto.lesson.LessonResponse;
@@ -71,6 +72,7 @@ public class LessonServiceImpl implements LessonService {
 
     @Override
     @Transactional
+    @Audited(action = "LESSON_CREATED", entityType = "LESSON")
     public LessonResponse create(CreateLessonRequest request) {
         Cohort cohort = cohortRepository.findByIdAndDeletedFalse(request.cohortId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Cohort", request.cohortId()));

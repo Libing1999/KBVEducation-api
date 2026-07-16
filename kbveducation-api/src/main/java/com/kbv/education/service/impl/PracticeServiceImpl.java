@@ -1,5 +1,6 @@
 package com.kbv.education.service.impl;
 
+import com.kbv.education.audit.Audited;
 import com.kbv.education.dto.file.FileDownloadResult;
 import com.kbv.education.dto.file.FileResponse;
 import com.kbv.education.dto.practice.AdminUpdatePracticeRequest;
@@ -233,6 +234,7 @@ public class PracticeServiceImpl implements PracticeService {
 
     @Override
     @Transactional
+    @Audited(action = "PRACTICE_APPROVED", entityType = "PRACTICE_SESSION")
     public PracticeSessionResponse approve(UUID id, UUID adminId, String comment) {
         return decide(id, adminId, PracticeStatus.APPROVED, comment);
     }

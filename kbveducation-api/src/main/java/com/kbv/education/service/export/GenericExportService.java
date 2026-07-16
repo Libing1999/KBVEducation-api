@@ -1,5 +1,6 @@
 package com.kbv.education.service.export;
 
+import com.kbv.education.audit.Audited;
 import com.kbv.education.dto.export.ExportFormat;
 import com.kbv.education.dto.file.FileDownloadResult;
 import com.kbv.education.entity.ExportHistory;
@@ -46,6 +47,7 @@ public class GenericExportService {
     }
 
     @Transactional
+    @Audited(action = "EXPORT_GENERATED", entityType = "EXPORT")
     public FileDownloadResult export(ExportDataset dataset, ExportFormat format, ExportFilters filters) {
         ExportDatasetHandler handler = handlers.get(dataset);
         if (handler == null) {

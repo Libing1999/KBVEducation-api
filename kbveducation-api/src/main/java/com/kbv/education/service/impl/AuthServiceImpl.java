@@ -4,6 +4,7 @@ import com.kbv.education.dto.auth.AuthUserResponse;
 import com.kbv.education.dto.auth.LoginRequest;
 import com.kbv.education.dto.auth.LoginResponse;
 import com.kbv.education.dto.auth.TokenResponse;
+import com.kbv.education.audit.Audited;
 import com.kbv.education.entity.RefreshToken;
 import com.kbv.education.entity.User;
 import com.kbv.education.entity.UserSession;
@@ -46,6 +47,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
+    @Audited(action = "LOGIN", entityType = "AUTH", failureAction = "LOGIN_FAILED", captureResult = false)
     public LoginResponse login(LoginRequest request, HttpServletRequest httpRequest) {
         Authentication authentication;
         try {
@@ -102,6 +104,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
+    @Audited(action = "LOGOUT", entityType = "AUTH")
     public void logout(UUID userId) {
         userRepository.findByIdAndDeletedFalse(userId)
                 .ifPresent(refreshTokenService::revokeAllForUser);

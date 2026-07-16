@@ -1,5 +1,6 @@
 package com.kbv.education.service.impl;
 
+import com.kbv.education.audit.Audited;
 import com.kbv.education.dto.request.CreateUserRequest;
 import com.kbv.education.dto.request.ResetPasswordRequest;
 import com.kbv.education.dto.request.UpdateStatusRequest;
@@ -65,6 +66,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    @Audited(action = "USER_CREATED", entityType = "USER")
     public UserResponse create(CreateUserRequest request) {
         User user = accountFactory.createAccount(request.email(), request.password(),
                 request.firstName(), request.lastName(), request.phone(), request.role());
@@ -74,6 +76,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    @Audited(action = "USER_UPDATED", entityType = "USER")
     public UserResponse update(UUID id, UpdateUserRequest request) {
         User user = getActiveUser(id);
         user.setFirstName(request.firstName());
@@ -84,6 +87,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    @Audited(action = "USER_STATUS_CHANGED", entityType = "USER")
     public UserResponse updateStatus(UUID id, UpdateStatusRequest request) {
         User user = getActiveUser(id);
         user.setStatus(request.status());

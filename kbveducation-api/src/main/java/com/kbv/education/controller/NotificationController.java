@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -57,5 +58,12 @@ public class NotificationController {
     public ApiResponse<Void> markAllRead(@AuthenticationPrincipal UserPrincipal principal) {
         notificationService.markAllRead(principal.getId());
         return ApiResponse.success("All marked as read");
+    }
+
+    @Operation(summary = "Delete one of my notifications")
+    @DeleteMapping("/{id}")
+    public ApiResponse<Void> delete(@AuthenticationPrincipal UserPrincipal principal, @PathVariable UUID id) {
+        notificationService.delete(principal.getId(), id);
+        return ApiResponse.success("Notification deleted");
     }
 }

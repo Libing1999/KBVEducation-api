@@ -123,6 +123,12 @@
             <version>1.0.10</version>
         </dependency>
 
+        <!-- Audit trail AOP (Phase 5 Step 4) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
