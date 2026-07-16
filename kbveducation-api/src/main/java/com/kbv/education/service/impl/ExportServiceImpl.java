@@ -5,6 +5,7 @@ import com.kbv.education.dto.dashboard.StudentProgressResponse;
 import com.kbv.education.dto.export.ExportFormat;
 import com.kbv.education.dto.file.FileDownloadResult;
 import com.kbv.education.entity.Cohort;
+import com.kbv.education.entity.ExportHistory;
 import com.kbv.education.entity.LeaderboardSnapshot;
 import com.kbv.education.entity.ScoreConfig;
 import com.kbv.education.entity.StudentCohort;
@@ -12,6 +13,7 @@ import com.kbv.education.entity.StudentScore;
 import com.kbv.education.entity.enums.LeaderboardSortField;
 import com.kbv.education.exception.ResourceNotFoundException;
 import com.kbv.education.repository.CohortRepository;
+import com.kbv.education.repository.ExportHistoryRepository;
 import com.kbv.education.repository.LeaderboardSnapshotRepository;
 import com.kbv.education.repository.ScoreConfigRepository;
 import com.kbv.education.repository.StudentCohortRepository;
@@ -45,9 +47,10 @@ public class ExportServiceImpl implements ExportService {
     private final TierHistoryRepository tierHistoryRepository;
     private final ScoreConfigRepository scoreConfigRepository;
     private final ProgressService progressService;
+    private final ExportHistoryRepository exportHistoryRepository;
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public FileDownloadResult exportLeaderboard(UUID cohortId, LeaderboardSortField sortBy, ExportFormat format) {
         Cohort cohort = requireCohort(cohortId);
         LeaderboardSortField effectiveSort = sortBy != null ? sortBy : activeConfig().getLeaderboardSortBy();
@@ -74,7 +77,7 @@ public class ExportServiceImpl implements ExportService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public FileDownloadResult exportScores(UUID cohortId, ExportFormat format) {
         Cohort cohort = requireCohort(cohortId);
         List<StudentScore> scores = studentScoreRepository.findByCohort_IdAndCurrentTrueAndDeletedFalse(cohortId);
@@ -103,7 +106,7 @@ public class ExportServiceImpl implements ExportService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public FileDownloadResult exportTiers(UUID cohortId, ExportFormat format) {
         Cohort cohort = requireCohort(cohortId);
         List<StudentCohort> members = studentCohortRepository.findByCohort_IdAndActiveTrueAndDeletedFalse(cohortId);
@@ -132,7 +135,7 @@ public class ExportServiceImpl implements ExportService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public FileDownloadResult exportStudentProgress(UUID studentId, ExportFormat format) {
         StudentProgressResponse progress = progressService.getProgressForStudent(studentId);
 
@@ -154,8 +157,22 @@ public class ExportServiceImpl implements ExportService {
     private FileDownloadResult buildDownload(String fileName, List<String> headers, List<List<Object>> rows,
                                               ExportFormat format) {
         byte[] bytes = TabularExportWriter.write(format, headers, rows);
+        recordHistory(fileName, format, rows.size());
         return new FileDownloadResult(fileName, TabularExportWriter.contentType(format), bytes.length,
                 new ByteArrayResource(bytes));
+    }
+
+    /** Additive (Phase 5 Step 3): every export run, old dataset or new, gets a history row. */
+    private void recordHistory(String fileName, ExportFormat format, int rowCount) {
+        String dataset = fileName.contains("leaderboard") ? "LEADERBOARD"
+                : fileName.contains("scores") ? "COMPOSITE_SCORES"
+                : fileName.contains("tiers") ? "TIER_HISTORY"
+                : "PROGRESS";
+        ExportHistory history = new ExportHistory();
+        history.setDataset(dataset);
+        history.setFormat(format.name());
+        history.setRowCount(rowCount);
+        exportHistoryRepository.save(history);
     }
 
     private String fileName(String base, ExportFormat format) {
