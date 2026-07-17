@@ -49,6 +49,18 @@ Swagger UI: `http://localhost:8080/swagger-ui.html`
 | `JWT_REFRESH_EXPIRATION` | `604800000` | Refresh token TTL (ms) |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Allowed frontend origins |
 
+## Docker
+
+```bash
+docker build -t kbv-education-api .
+```
+
+The image is a multi-stage build (Maven → JRE 21 runtime), installs
+`postgresql-client` for the Backup module's `pg_dump` calls, runs as a
+non-root user, and declares a `HEALTHCHECK` against `GET /actuator/health`.
+For the full stack (Postgres + backend + frontend) see
+[`../DEPLOYMENT.md`](../DEPLOYMENT.md) and [`../docker-compose.yml`](../docker-compose.yml).
+
 ## Build plan
 - [x] **Step 1** — Backend project structure & foundations
 - [x] **Step 2** — Frontend project structure

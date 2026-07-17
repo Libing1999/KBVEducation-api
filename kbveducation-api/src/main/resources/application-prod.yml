@@ -1,0 +1,7 @@
+# Activated via SPRING_PROFILES_ACTIVE=prod (the default in the Docker image).
+# Dials back the DEBUG-level app logging application.yml sets for local dev -
+# left on there deliberately for the dev inner loop, but too noisy for a
+# production log volume.
+logging:
+  level:
+    com.kbv.education: INFO
