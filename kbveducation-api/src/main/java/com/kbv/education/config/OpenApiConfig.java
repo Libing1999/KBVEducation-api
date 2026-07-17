@@ -23,7 +23,11 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("KBV Education API")
-                        .description("Course Companion Platform - Phase 1 (Auth, Users, Cohorts, Dashboard)")
+                        .description("Course Companion Platform - Auth, admin/student/parent management, "
+                                + "lessons/homework/quizzes/reflections/practice, scoring & tiers, leaderboard "
+                                + "& analytics, certificates, data export, audit trail, system settings, backups, "
+                                + "and production-readiness features (security hardening, error monitoring, "
+                                + "caching, global search)")
                         .version("v0.1.0")
                         .contact(new Contact().name("KBV Education")))
                 .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME))
