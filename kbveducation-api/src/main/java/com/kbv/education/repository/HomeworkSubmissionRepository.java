@@ -27,6 +27,9 @@ public interface HomeworkSubmissionRepository extends JpaRepository<HomeworkSubm
 
     long countByStudent_IdAndSubmittedAtBetweenAndDeletedFalse(UUID studentId, Instant from, Instant to);
 
+    /** Platform-wide count in a window — powers the admin dashboard's Activity Overview chart. */
+    long countBySubmittedAtBetweenAndDeletedFalse(Instant from, Instant to);
+
     @Query("select distinct s.homework.lesson.id from HomeworkSubmission s "
             + "where s.student.id = :sid and s.deleted = false")
     List<UUID> submittedLessonIds(@Param("sid") UUID studentId);

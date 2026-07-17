@@ -31,6 +31,9 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, UUID>,
 
     long countByStudent_IdAndSubmittedAtBetweenAndDeletedFalse(UUID studentId, Instant from, Instant to);
 
+    /** Platform-wide count in a window — powers the admin dashboard's Activity Overview chart. */
+    long countByStatusAndSubmittedAtBetweenAndDeletedFalse(AttemptStatus status, Instant from, Instant to);
+
     @Query("select distinct a.quiz.lesson.id from QuizAttempt a where a.student.id = :sid and a.deleted = false")
     List<UUID> completedLessonIds(@Param("sid") UUID studentId);
 

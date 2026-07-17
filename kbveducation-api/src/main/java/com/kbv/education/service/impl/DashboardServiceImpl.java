@@ -1,11 +1,14 @@
 package com.kbv.education.service.impl;
 
 import com.kbv.education.dto.response.AdminDashboardResponse;
+import com.kbv.education.dto.response.AdminDashboardTrendsResponse;
 import com.kbv.education.dto.response.CohortResponse;
 import com.kbv.education.dto.response.ScoreDashboardResponse;
 import com.kbv.education.dto.response.UserResponse;
 import com.kbv.education.dto.score.StudentScoreResponse;
+import com.kbv.education.entity.StudentScore;
 import com.kbv.education.entity.User;
+import com.kbv.education.entity.enums.AttemptStatus;
 import com.kbv.education.entity.enums.CohortStatus;
 import com.kbv.education.entity.enums.RoleType;
 import com.kbv.education.exception.BusinessRuleException;
@@ -13,8 +16,13 @@ import com.kbv.education.exception.ResourceNotFoundException;
 import com.kbv.education.mapper.CohortMapper;
 import com.kbv.education.mapper.UserMapper;
 import com.kbv.education.repository.CohortRepository;
+import com.kbv.education.repository.HomeworkSubmissionRepository;
 import com.kbv.education.repository.ParentStudentRepository;
+import com.kbv.education.repository.PracticeSessionRepository;
+import com.kbv.education.repository.QuizAttemptRepository;
+import com.kbv.education.repository.ReflectionEntryRepository;
 import com.kbv.education.repository.StudentCohortRepository;
+import com.kbv.education.repository.StudentScoreRepository;
 import com.kbv.education.repository.UserRepository;
 import com.kbv.education.repository.UserSessionRepository;
 import com.kbv.education.service.DashboardService;
@@ -28,6 +36,8 @@ import java.io.File;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -38,11 +48,20 @@ public class DashboardServiceImpl implements DashboardService {
     /** Below this free space, the "System Health" dashboard card flags unhealthy (Phase 5 Step 7). */
     private static final long MIN_HEALTHY_FREE_DISK_MB = 500;
 
+    private static final int MIN_TREND_DAYS = 7;
+    private static final int MAX_TREND_DAYS = 90;
+    private static final int TOP_STUDENTS_LIMIT = 5;
+
     private final UserRepository userRepository;
     private final CohortRepository cohortRepository;
     private final UserSessionRepository userSessionRepository;
     private final StudentCohortRepository studentCohortRepository;
     private final ParentStudentRepository parentStudentRepository;
+    private final ReflectionEntryRepository reflectionEntryRepository;
+    private final PracticeSessionRepository practiceSessionRepository;
+    private final HomeworkSubmissionRepository homeworkSubmissionRepository;
+    private final QuizAttemptRepository quizAttemptRepository;
+    private final StudentScoreRepository studentScoreRepository;
     private final UserMapper userMapper;
     private final CohortMapper cohortMapper;
     private final ScoreEngineService scoreEngineService;
@@ -76,6 +95,92 @@ public class DashboardServiceImpl implements DashboardService {
         return new AdminDashboardResponse(totalStudents, totalParents, totalCohorts,
                 activeCohorts, inactiveCohorts, todaysLogins, lockedAccounts, systemHealthy, freeDiskSpaceMb,
                 recentUsers, recentCohorts);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AdminDashboardTrendsResponse adminDashboardTrends(int days) {
+        int windowDays = Math.min(Math.max(days, MIN_TREND_DAYS), MAX_TREND_DAYS);
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate windowStart = today.minusDays(windowDays - 1L);
+
+        List<AdminDashboardTrendsResponse.DailyValue> studentsGrowth = new ArrayList<>();
+        List<AdminDashboardTrendsResponse.DailyValue> parentsGrowth = new ArrayList<>();
+        List<AdminDashboardTrendsResponse.DailyValue> cohortsGrowth = new ArrayList<>();
+        List<AdminDashboardTrendsResponse.DailyValue> activeCohortsGrowth = new ArrayList<>();
+        List<AdminDashboardTrendsResponse.DailyValue> loginsPerDay = new ArrayList<>();
+        List<AdminDashboardTrendsResponse.ActivityDay> activityTrend = new ArrayList<>();
+
+        for (LocalDate day = windowStart; !day.isAfter(today); day = day.plusDays(1)) {
+            Instant dayStart = day.atStartOfDay(ZoneOffset.UTC).toInstant();
+            Instant dayEnd = day.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+
+            studentsGrowth.add(new AdminDashboardTrendsResponse.DailyValue(day,
+                    userRepository.countByRole_NameAndCreatedAtBeforeAndDeletedFalse(RoleType.STUDENT, dayEnd)));
+            parentsGrowth.add(new AdminDashboardTrendsResponse.DailyValue(day,
+                    userRepository.countByRole_NameAndCreatedAtBeforeAndDeletedFalse(RoleType.PARENT, dayEnd)));
+            cohortsGrowth.add(new AdminDashboardTrendsResponse.DailyValue(day,
+                    cohortRepository.countByCreatedAtBeforeAndDeletedFalse(dayEnd)));
+            activeCohortsGrowth.add(new AdminDashboardTrendsResponse.DailyValue(day,
+                    cohortRepository.countByStatusAndCreatedAtBeforeAndDeletedFalse(CohortStatus.ACTIVE, dayEnd)));
+            loginsPerDay.add(new AdminDashboardTrendsResponse.DailyValue(day,
+                    userSessionRepository.countByLoginAtBetween(dayStart, dayEnd)));
+
+            activityTrend.add(new AdminDashboardTrendsResponse.ActivityDay(
+                    day,
+                    reflectionEntryRepository.countByReflectionDateAndDeletedFalse(day),
+                    practiceSessionRepository.countByStudyDateAndDeletedFalse(day),
+                    homeworkSubmissionRepository.countBySubmittedAtBetweenAndDeletedFalse(dayStart, dayEnd),
+                    quizAttemptRepository.countByStatusAndSubmittedAtBetweenAndDeletedFalse(
+                            AttemptStatus.SUBMITTED, dayStart, dayEnd)));
+        }
+
+        Double studentsChangePct = percentChange(studentsGrowth);
+        Double parentsChangePct = percentChange(parentsGrowth);
+        Double cohortsChangePct = percentChange(cohortsGrowth);
+        Double activeCohortsChangePct = percentChange(activeCohortsGrowth);
+
+        long todaysLoginCount = loginsPerDay.isEmpty() ? 0 : loginsPerDay.get(loginsPerDay.size() - 1).value();
+        long yesterdayLoginCount = loginsPerDay.size() < 2 ? 0 : loginsPerDay.get(loginsPerDay.size() - 2).value();
+        Double loginsChangePct = percentChange(yesterdayLoginCount, todaysLoginCount);
+
+        long activeCohortCount = cohortRepository.countByStatusAndDeletedFalse(CohortStatus.ACTIVE);
+        long upcomingCohortCount = cohortRepository.countByStatusAndDeletedFalse(CohortStatus.UPCOMING);
+        long totalCohortCount = cohortRepository.countByDeletedFalse();
+        long inactiveCohortCount = totalCohortCount - activeCohortCount - upcomingCohortCount;
+        AdminDashboardTrendsResponse.CohortStatusBreakdown cohortStatus =
+                new AdminDashboardTrendsResponse.CohortStatusBreakdown(
+                        activeCohortCount, inactiveCohortCount, upcomingCohortCount);
+
+        List<AdminDashboardTrendsResponse.TopStudent> topStudents = studentScoreRepository
+                .findByCurrentTrueAndDeletedFalse().stream()
+                .sorted(Comparator.comparing(StudentScore::getCompositeScore).reversed())
+                .limit(TOP_STUDENTS_LIMIT)
+                .map(s -> new AdminDashboardTrendsResponse.TopStudent(
+                        s.getStudent().getFullName(),
+                        s.getCohort() != null ? s.getCohort().getName() : null,
+                        s.getCompositeScore().doubleValue()))
+                .toList();
+
+        return new AdminDashboardTrendsResponse(
+                studentsGrowth, parentsGrowth, cohortsGrowth, activeCohortsGrowth, loginsPerDay,
+                studentsChangePct, parentsChangePct, cohortsChangePct, activeCohortsChangePct, loginsChangePct,
+                activityTrend, cohortStatus, topStudents);
+    }
+
+    private Double percentChange(List<AdminDashboardTrendsResponse.DailyValue> series) {
+        if (series.isEmpty()) {
+            return null;
+        }
+        return percentChange(series.get(0).value(), series.get(series.size() - 1).value());
+    }
+
+    /** Null when the base is zero — a percentage vs. nothing isn't meaningful. */
+    private Double percentChange(long from, long to) {
+        if (from == 0) {
+            return to == 0 ? 0.0 : null;
+        }
+        return ((to - from) / (double) from) * 100.0;
     }
 
     @Override

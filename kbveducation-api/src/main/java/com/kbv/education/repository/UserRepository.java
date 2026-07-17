@@ -31,6 +31,9 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
 
     long countByLockedUntilAfterAndDeletedFalse(Instant now);
 
+    /** Cumulative count as-of a point in time — powers the admin dashboard's growth sparklines. */
+    long countByRole_NameAndCreatedAtBeforeAndDeletedFalse(RoleType role, Instant before);
+
     List<User> findTop5ByDeletedFalseOrderByCreatedAtDesc();
 
     List<User> findByRole_NameAndStatusAndDeletedFalse(RoleType role, com.kbv.education.entity.enums.UserStatus status);
