@@ -10,6 +10,9 @@ public record AdminDashboardResponse(
         long activeCohorts,
         long inactiveCohorts,
         long todaysLogins,
+        long lockedAccounts,
+        boolean systemHealthy,
+        long freeDiskSpaceMb,
         List<UserResponse> recentUsers,
         List<CohortResponse> recentCohorts
 ) {

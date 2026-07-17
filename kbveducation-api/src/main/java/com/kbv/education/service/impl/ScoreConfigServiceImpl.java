@@ -15,6 +15,7 @@ import com.kbv.education.service.ScoreConfigService;
 import com.kbv.education.service.ScoreEngineService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +43,7 @@ public class ScoreConfigServiceImpl implements ScoreConfigService {
 
     @Override
     @Transactional
+    @CacheEvict(cacheNames = "scoreConfig", allEntries = true)
     public ScoreConfigResponse update(UpdateScoreConfigRequest request) {
         validateWeights(request);
         validateWindow(request.reflectionWindowStart(), request.reflectionWindowEnd());

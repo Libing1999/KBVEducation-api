@@ -40,6 +40,21 @@ spring:
       max-file-size: ${MAX_FILE_SIZE:25MB}
       max-request-size: ${MAX_REQUEST_SIZE:150MB}
 
+  cache:
+    type: caffeine
+    cache-names: scoreConfig,systemSettings
+    caffeine:
+      spec: maximumSize=10,expireAfterWrite=10m
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
 server:
   port: ${SERVER_PORT:8080}
   servlet:

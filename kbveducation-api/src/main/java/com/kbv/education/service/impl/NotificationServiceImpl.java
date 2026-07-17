@@ -13,6 +13,7 @@ import com.kbv.education.repository.NotificationRepository;
 import com.kbv.education.repository.StudentCohortRepository;
 import com.kbv.education.repository.UserRepository;
 import com.kbv.education.service.NotificationService;
+import com.kbv.education.utils.InputSanitizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -86,7 +87,7 @@ public class NotificationServiceImpl implements NotificationService {
         notification.setRecipient(userRepository.getReferenceById(recipientId));
         notification.setType(type);
         notification.setTitle(title);
-        notification.setMessage(message);
+        notification.setMessage(InputSanitizer.sanitize(message, 2000));
         notification.setReferenceType(referenceType);
         notification.setReferenceId(referenceId);
         notification.setRead(false);

@@ -15,6 +15,8 @@ public record UserResponse(
         RoleType role,
         UserStatus status,
         Instant lastLoginAt,
-        Instant createdAt
+        Instant createdAt,
+        boolean locked,
+        int failedLoginAttempts
 ) {
 }

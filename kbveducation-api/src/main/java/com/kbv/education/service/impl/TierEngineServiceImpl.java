@@ -21,6 +21,7 @@ import com.kbv.education.repository.TierRuleRepository;
 import com.kbv.education.repository.UserRepository;
 import com.kbv.education.service.ScoreAuditLogService;
 import com.kbv.education.service.TierEngineService;
+import com.kbv.education.utils.InputSanitizer;
 import com.kbv.education.utils.PageableBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -162,6 +163,7 @@ public class TierEngineServiceImpl implements TierEngineService {
     @Transactional
     @Audited(action = "TIER_OVERRIDDEN", entityType = "TIER")
     public TierHistoryResponse override(UUID studentId, String tierName, String reason, UUID adminId) {
+        reason = InputSanitizer.sanitize(reason, 1000);
         User student = userRepository.findByIdAndDeletedFalse(studentId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Student", studentId));
         User admin = userRepository.findByIdAndDeletedFalse(adminId)

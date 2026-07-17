@@ -16,6 +16,7 @@ import com.kbv.education.repository.UserSessionRepository;
 import com.kbv.education.security.JwtService;
 import com.kbv.education.security.UserPrincipal;
 import com.kbv.education.service.AuthService;
+import com.kbv.education.service.LoginAttemptService;
 import com.kbv.education.service.RefreshTokenService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -44,11 +45,17 @@ public class AuthServiceImpl implements AuthService {
     private final RefreshTokenService refreshTokenService;
     private final JwtService jwtService;
     private final UserMapper userMapper;
+    private final LoginAttemptService loginAttemptService;
 
     @Override
     @Transactional
     @Audited(action = "LOGIN", entityType = "AUTH", failureAction = "LOGIN_FAILED", captureResult = false)
     public LoginResponse login(LoginRequest request, HttpServletRequest httpRequest) {
+        User existingUser = userRepository.findByEmailIgnoreCaseAndDeletedFalse(request.email()).orElse(null);
+        if (existingUser != null && existingUser.isLocked()) {
+            throw new ApiException(ErrorCode.ACCOUNT_LOCKED);
+        }
+
         Authentication authentication;
         try {
             authentication = authenticationManager.authenticate(
@@ -56,6 +63,9 @@ public class AuthServiceImpl implements AuthService {
         } catch (DisabledException ex) {
             throw new ApiException(ErrorCode.ACCOUNT_INACTIVE);
         } catch (BadCredentialsException ex) {
+            if (existingUser != null) {
+                loginAttemptService.recordFailedAttempt(existingUser.getId());
+            }
             throw new ApiException(ErrorCode.INVALID_CREDENTIALS);
         }
 
@@ -63,6 +73,8 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByIdAndDeletedFalse(principal.getId())
                 .orElseThrow(() -> new ApiException(ErrorCode.INVALID_CREDENTIALS));
 
+        user.setFailedLoginAttempts(0);
+        user.setLockedUntil(null);
         user.setLastLoginAt(Instant.now());
         userRepository.save(user);
 

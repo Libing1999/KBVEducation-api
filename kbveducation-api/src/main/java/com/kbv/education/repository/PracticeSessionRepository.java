@@ -45,4 +45,8 @@ public interface PracticeSessionRepository extends JpaRepository<PracticeSession
 
     @Query("select distinct p.studyDate from PracticeSession p where p.student.id = :sid and p.deleted = false")
     List<LocalDate> practiceDates(@Param("sid") UUID studentId);
+
+    @Query("select p from PracticeSession p where p.deleted = false "
+            + "and lower(p.subject) like lower(concat('%', :q, '%'))")
+    List<PracticeSession> search(@Param("q") String query, org.springframework.data.domain.Pageable pageable);
 }

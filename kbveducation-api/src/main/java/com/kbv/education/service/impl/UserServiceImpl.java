@@ -14,6 +14,7 @@ import com.kbv.education.exception.ResourceNotFoundException;
 import com.kbv.education.mapper.UserMapper;
 import com.kbv.education.repository.UserRepository;
 import com.kbv.education.repository.spec.UserSpecifications;
+import com.kbv.education.security.PasswordPolicyValidator;
 import com.kbv.education.service.AccountFactory;
 import com.kbv.education.service.RefreshTokenService;
 import com.kbv.education.service.UserService;
@@ -43,6 +44,7 @@ public class UserServiceImpl implements UserService {
     private final AccountFactory accountFactory;
     private final RefreshTokenService refreshTokenService;
     private final PasswordEncoder passwordEncoder;
+    private final PasswordPolicyValidator passwordPolicyValidator;
 
     @Override
     @Transactional(readOnly = true)
@@ -68,6 +70,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     @Audited(action = "USER_CREATED", entityType = "USER")
     public UserResponse create(CreateUserRequest request) {
+        passwordPolicyValidator.validate(request.password());
         User user = accountFactory.createAccount(request.email(), request.password(),
                 request.firstName(), request.lastName(), request.phone(), request.role());
         log.info("Created user {} with role {}", user.getEmail(), request.role());
@@ -103,11 +106,23 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public void resetPassword(UUID id, ResetPasswordRequest request) {
+        passwordPolicyValidator.validate(request.newPassword());
         User user = getActiveUser(id);
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
         userRepository.save(user);
         refreshTokenService.revokeAllForUser(user);
         log.info("Reset password for user {}", user.getEmail());
+    }
+
+    @Override
+    @Transactional
+    public UserResponse unlock(UUID id) {
+        User user = getActiveUser(id);
+        user.setFailedLoginAttempts(0);
+        user.setLockedUntil(null);
+        User saved = userRepository.save(user);
+        log.info("Unlocked user {}", user.getEmail());
+        return userMapper.toUserResponse(saved);
     }
 
     @Override

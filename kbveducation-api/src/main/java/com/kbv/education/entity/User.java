@@ -52,11 +52,22 @@ public class User extends BaseEntity {
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
 
+    /** Phase 5 Step 7: account lockout. Reset to 0 on any successful login. */
+    @Column(name = "failed_login_attempts", nullable = false)
+    private int failedLoginAttempts = 0;
+
+    @Column(name = "locked_until")
+    private Instant lockedUntil;
+
     public String getFullName() {
         return firstName + " " + lastName;
     }
 
     public boolean isActive() {
         return status == UserStatus.ACTIVE;
+    }
+
+    public boolean isLocked() {
+        return lockedUntil != null && lockedUntil.isAfter(Instant.now());
     }
 }

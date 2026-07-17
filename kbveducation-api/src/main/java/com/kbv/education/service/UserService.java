@@ -27,4 +27,7 @@ public interface UserService {
     void resetPassword(UUID id, ResetPasswordRequest request);
 
     void softDelete(UUID id);
+
+    /** Clears failed-attempt count and any active lock — an admin recovery path (Phase 5 Step 7). */
+    UserResponse unlock(UUID id);
 }

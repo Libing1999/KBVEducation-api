@@ -24,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.File;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -33,6 +34,9 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class DashboardServiceImpl implements DashboardService {
+
+    /** Below this free space, the "System Health" dashboard card flags unhealthy (Phase 5 Step 7). */
+    private static final long MIN_HEALTHY_FREE_DISK_MB = 500;
 
     private final UserRepository userRepository;
     private final CohortRepository cohortRepository;
@@ -65,8 +69,13 @@ public class DashboardServiceImpl implements DashboardService {
                         studentCohortRepository.countByCohort_IdAndActiveTrueAndDeletedFalse(c.getId())))
                 .toList();
 
+        long lockedAccounts = userRepository.countByLockedUntilAfterAndDeletedFalse(Instant.now());
+        long freeDiskSpaceMb = new File(".").getFreeSpace() / (1024 * 1024);
+        boolean systemHealthy = freeDiskSpaceMb >= MIN_HEALTHY_FREE_DISK_MB;
+
         return new AdminDashboardResponse(totalStudents, totalParents, totalCohorts,
-                activeCohorts, inactiveCohorts, todaysLogins, recentUsers, recentCohorts);
+                activeCohorts, inactiveCohorts, todaysLogins, lockedAccounts, systemHealthy, freeDiskSpaceMb,
+                recentUsers, recentCohorts);
     }
 
     @Override

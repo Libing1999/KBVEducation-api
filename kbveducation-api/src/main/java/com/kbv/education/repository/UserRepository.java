@@ -2,8 +2,11 @@ package com.kbv.education.repository;
 
 import com.kbv.education.entity.User;
 import com.kbv.education.entity.enums.RoleType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.List;
@@ -26,9 +29,17 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
 
     long countByLastLoginAtAfterAndDeletedFalse(Instant since);
 
+    long countByLockedUntilAfterAndDeletedFalse(Instant now);
+
     List<User> findTop5ByDeletedFalseOrderByCreatedAtDesc();
 
     List<User> findByRole_NameAndStatusAndDeletedFalse(RoleType role, com.kbv.education.entity.enums.UserStatus status);
 
     long countByRole_NameAndStatusAndDeletedFalse(RoleType role, com.kbv.education.entity.enums.UserStatus status);
+
+    @Query("select u from User u where u.deleted = false and ("
+            + "lower(u.email) like lower(concat('%', :q, '%')) "
+            + "or lower(u.firstName) like lower(concat('%', :q, '%')) "
+            + "or lower(u.lastName) like lower(concat('%', :q, '%')))")
+    List<User> search(@Param("q") String query, Pageable pageable);
 }

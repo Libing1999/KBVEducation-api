@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kbv.education.security.JwtAuthenticationFilter;
 import com.kbv.education.security.JwtService;
 import com.kbv.education.security.MaintenanceModeFilter;
+import com.kbv.education.security.RateLimitFilter;
 import com.kbv.education.security.RestAccessDeniedHandler;
 import com.kbv.education.security.RestAuthenticationEntryPoint;
 import com.kbv.education.service.SystemSettingsService;
@@ -51,15 +52,26 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
+                // CSRF is deliberately not enabled: this API is stateless JWT-bearer-token
+                // auth with no ambient cookie credential for a forged cross-origin request
+                // to ride on, so there's no threat model for CSRF tokens to protect against.
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .headers(headers -> headers
+                        .httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31536000))
+                        .contentTypeOptions(contentTypeOptions -> {
+                        })
+                        .frameOptions(frame -> frame.deny())
+                        .contentSecurityPolicy(csp -> csp.policyDirectives(
+                                "default-src 'self'; frame-ancestors 'none'; object-src 'none'")))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(AppConstants.PUBLIC_ENDPOINTS).permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
+                .addFilterBefore(new RateLimitFilter(objectMapper), UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService),
                         UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(new MaintenanceModeFilter(systemSettingsService, objectMapper),

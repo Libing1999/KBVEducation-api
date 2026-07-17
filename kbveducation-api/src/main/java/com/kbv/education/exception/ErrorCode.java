@@ -29,7 +29,9 @@ public enum ErrorCode {
     BUSINESS_RULE_VIOLATION(HttpStatus.UNPROCESSABLE_ENTITY, "Business rule violation"),
 
     // Phase 5: operational
-    MAINTENANCE_MODE(HttpStatus.SERVICE_UNAVAILABLE, "The platform is currently under maintenance");
+    MAINTENANCE_MODE(HttpStatus.SERVICE_UNAVAILABLE, "The platform is currently under maintenance"),
+    ACCOUNT_LOCKED(HttpStatus.LOCKED, "Account is temporarily locked due to too many failed login attempts"),
+    RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "Too many requests - please try again shortly");
 
     private final HttpStatus status;
     private final String defaultMessage;

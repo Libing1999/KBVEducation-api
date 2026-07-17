@@ -93,4 +93,10 @@ public class UserController {
         userService.softDelete(id);
         return ApiResponse.success("User deleted");
     }
+
+    @Operation(summary = "Clear a user's account lockout")
+    @PutMapping("/{id}/unlock")
+    public ApiResponse<UserResponse> unlock(@PathVariable UUID id) {
+        return ApiResponse.success("Account unlocked", userService.unlock(id));
+    }
 }
