@@ -27,6 +27,7 @@ import com.kbv.education.repository.spec.HomeworkSubmissionSpecifications;
 import com.kbv.education.service.ActivityService;
 import com.kbv.education.service.HomeworkSubmissionService;
 import com.kbv.education.service.NotificationService;
+import com.kbv.education.service.SystemSettingsService;
 import com.kbv.education.service.storage.FileStorageService;
 import com.kbv.education.service.storage.StoredFile;
 import com.kbv.education.utils.MimeTypes;
@@ -55,9 +56,6 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
 
     private static final String SUBDIR = "homework";
     private static final List<String> SORTABLE = List.of("submittedAt", "createdAt");
-    /** Fallback allowed types when a homework does not restrict them. */
-    private static final Set<String> DEFAULT_ALLOWED =
-            Set.of("jpg", "jpeg", "png", "pdf", "doc", "docx", "mp3", "m4a", "webm", "mp4");
 
     private final HomeworkRepository homeworkRepository;
     private final HomeworkSubmissionRepository submissionRepository;
@@ -69,6 +67,7 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
     private final FileMapper fileMapper;
     private final NotificationService notificationService;
     private final ActivityService activityService;
+    private final SystemSettingsService systemSettingsService;
 
     @Override
     @Transactional
@@ -88,9 +87,10 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
         }
 
         Set<String> allowed = resolveAllowed(homework.getAllowedFileTypes());
-        long maxBytes = homework.getMaxFileSizeMb() != null
-                ? (long) homework.getMaxFileSizeMb() * 1024 * 1024
-                : Long.MAX_VALUE;
+        int maxMb = homework.getMaxFileSizeMb() != null
+                ? homework.getMaxFileSizeMb()
+                : systemSettingsService.getActiveEntity().getMaxFileSizeMb();
+        long maxBytes = (long) maxMb * 1024 * 1024;
 
         // Validate everything before storing anything.
         for (MultipartFile file : files) {
@@ -102,7 +102,7 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
             }
             if (file.getSize() > maxBytes) {
                 throw new BadRequestException(
-                        "File '" + original + "' exceeds the maximum size of " + homework.getMaxFileSizeMb() + " MB");
+                        "File '" + original + "' exceeds the maximum size of " + maxMb + " MB");
             }
         }
 
@@ -253,7 +253,7 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
 
     private Set<String> resolveAllowed(String csv) {
         if (csv == null || csv.isBlank()) {
-            return DEFAULT_ALLOWED;
+            return systemSettingsService.allowedFileExtensions();
         }
         return Arrays.stream(csv.split(","))
                 .map(s -> s.trim().toLowerCase(Locale.ROOT).replace(".", ""))

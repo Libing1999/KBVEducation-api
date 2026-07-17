@@ -30,6 +30,7 @@ public final class AppConstants {
             AUTH_BASE + "/login",
             AUTH_BASE + "/refresh",
             AUTH_BASE + "/forgot-password",
+            API_BASE + "/settings/public",
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",

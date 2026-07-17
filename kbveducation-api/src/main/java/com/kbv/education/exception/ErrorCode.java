@@ -26,7 +26,10 @@ public enum ErrorCode {
     ACCESS_DENIED(HttpStatus.FORBIDDEN, "You do not have permission to perform this action"),
 
     // Business rules
-    BUSINESS_RULE_VIOLATION(HttpStatus.UNPROCESSABLE_ENTITY, "Business rule violation");
+    BUSINESS_RULE_VIOLATION(HttpStatus.UNPROCESSABLE_ENTITY, "Business rule violation"),
+
+    // Phase 5: operational
+    MAINTENANCE_MODE(HttpStatus.SERVICE_UNAVAILABLE, "The platform is currently under maintenance");
 
     private final HttpStatus status;
     private final String defaultMessage;

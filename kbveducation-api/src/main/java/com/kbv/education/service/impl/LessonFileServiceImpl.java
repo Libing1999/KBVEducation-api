@@ -10,6 +10,7 @@ import com.kbv.education.mapper.FileMapper;
 import com.kbv.education.repository.LessonFileRepository;
 import com.kbv.education.repository.LessonRepository;
 import com.kbv.education.service.LessonFileService;
+import com.kbv.education.service.SystemSettingsService;
 import com.kbv.education.service.storage.FileStorageService;
 import com.kbv.education.service.storage.StoredFile;
 import com.kbv.education.utils.MimeTypes;
@@ -32,12 +33,12 @@ import java.util.UUID;
 public class LessonFileServiceImpl implements LessonFileService {
 
     private static final String SUBDIR = "lessons";
-    private static final Set<String> ALLOWED_EXTENSIONS = Set.of("pdf", "doc", "docx", "mp3", "mp4");
 
     private final LessonRepository lessonRepository;
     private final LessonFileRepository lessonFileRepository;
     private final FileStorageService fileStorageService;
     private final FileMapper fileMapper;
+    private final SystemSettingsService systemSettingsService;
 
     @Override
     @Transactional(readOnly = true)
@@ -60,9 +61,10 @@ public class LessonFileServiceImpl implements LessonFileService {
             String original = StringUtils.cleanPath(
                     file.getOriginalFilename() == null ? "file" : file.getOriginalFilename());
             String ext = extensionOf(original);
-            if (!ALLOWED_EXTENSIONS.contains(ext)) {
+            Set<String> allowedExtensions = systemSettingsService.allowedFileExtensions();
+            if (!allowedExtensions.contains(ext)) {
                 throw new BadRequestException(
-                        "File type '" + ext + "' is not allowed. Allowed: " + ALLOWED_EXTENSIONS);
+                        "File type '" + ext + "' is not allowed. Allowed: " + allowedExtensions);
             }
             if (lessonFileRepository.existsByLesson_IdAndFileNameAndDeletedFalse(lessonId, original)) {
                 throw new BadRequestException("A file named '" + original + "' already exists for this lesson");

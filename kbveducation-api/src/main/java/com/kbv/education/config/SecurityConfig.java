@@ -1,9 +1,12 @@
 package com.kbv.education.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kbv.education.security.JwtAuthenticationFilter;
 import com.kbv.education.security.JwtService;
+import com.kbv.education.security.MaintenanceModeFilter;
 import com.kbv.education.security.RestAccessDeniedHandler;
 import com.kbv.education.security.RestAuthenticationEntryPoint;
+import com.kbv.education.service.SystemSettingsService;
 import com.kbv.education.utils.AppConstants;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -42,6 +45,8 @@ public class SecurityConfig {
     private final RestAuthenticationEntryPoint authenticationEntryPoint;
     private final RestAccessDeniedHandler accessDeniedHandler;
     private final CorsProperties corsProperties;
+    private final SystemSettingsService systemSettingsService;
+    private final ObjectMapper objectMapper;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -56,7 +61,9 @@ public class SecurityConfig {
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService),
-                        UsernamePasswordAuthenticationFilter.class);
+                        UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(new MaintenanceModeFilter(systemSettingsService, objectMapper),
+                        JwtAuthenticationFilter.class);
 
         return http.build();
     }
