@@ -49,6 +49,23 @@ Swagger UI: `http://localhost:8080/swagger-ui.html`
 | `JWT_REFRESH_EXPIRATION` | `604800000` | Refresh token TTL (ms) |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Allowed frontend origins |
 
+## Testing
+
+```bash
+mvn test                    # unit + @DataJpaTest + @SpringBootTest, JaCoCo report at target/site/jacoco
+```
+
+Risk-prioritized, not exhaustive: account lockout (`LoginAttemptServiceImplTest`),
+the settings single-row upsert (`SystemSettingsServiceImplTest`), certificate
+generation with the PDF renderer mocked (`CertificateServiceImplTest`), the
+Global Search ILIKE query against a real Postgres connection
+(`UserRepositorySearchTest`, `@DataJpaTest`), and a full login → account-lockout
+→ rate-limit flow through the real Spring context (`AuthControllerIntegrationTest`).
+`@DataJpaTest`/`@SpringBootTest` run against the same Postgres instance
+`DB_URL` points at (no H2/Testcontainers dependency) — a local Postgres with
+migrations applied must be reachable. CI runs this against a
+`postgres:16-alpine` service container (see `.github/workflows/ci.yml`).
+
 ## Docker
 
 ```bash
