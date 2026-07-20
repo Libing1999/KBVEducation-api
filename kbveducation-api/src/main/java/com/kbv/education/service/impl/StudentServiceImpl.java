@@ -11,6 +11,7 @@ import com.kbv.education.entity.User;
 import com.kbv.education.entity.enums.CohortStatus;
 import com.kbv.education.entity.enums.RoleType;
 import com.kbv.education.entity.enums.UserStatus;
+import com.kbv.education.event.StudentCohortAssignedEvent;
 import com.kbv.education.exception.BusinessRuleException;
 import com.kbv.education.exception.ResourceNotFoundException;
 import com.kbv.education.repository.CohortRepository;
@@ -24,6 +25,7 @@ import com.kbv.education.service.StudentService;
 import com.kbv.education.utils.PageableBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -48,6 +50,7 @@ public class StudentServiceImpl implements StudentService {
     private final AccountFactory accountFactory;
     private final StudentResponseAssembler assembler;
     private final RefreshTokenService refreshTokenService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional(readOnly = true)
@@ -169,6 +172,10 @@ public class StudentServiceImpl implements StudentService {
         assignment.setAssignedAt(Instant.now());
         studentCohortRepository.save(assignment);
         log.info("Assigned student {} to cohort {}", student.getId(), cohort.getId());
+
+        // Consumed AFTER_COMMIT by the email listener: fires for first
+        // assignments and cohort moves alike, but not for the no-op above.
+        eventPublisher.publishEvent(new StudentCohortAssignedEvent(student.getId(), cohort.getId()));
     }
 
     private User getStudent(UUID id) {

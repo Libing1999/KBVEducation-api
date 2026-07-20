@@ -46,6 +46,22 @@ spring:
     caffeine:
       spec: maximumSize=10,expireAfterWrite=10m
 
+  # SMTP defaults (all optional) - the admin Email Settings page overrides
+  # these per field at runtime; values here are the env-driven fallback read
+  # by EmailSettingsServiceImpl. Spring's own MailSender auto-config is not
+  # used (the sender is built per send from the effective config).
+  mail:
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
 management:
   endpoints:
     web:
@@ -54,6 +70,17 @@ management:
   endpoint:
     health:
       show-details: never
+  health:
+    mail:
+      # The auto-configured mail health check pings spring.mail.* directly
+      # with Spring Boot's own singleton JavaMailSender - it doesn't know
+      # about the DB-stored/admin-configurable SMTP settings this app
+      # actually sends through (EmailService builds its own sender per
+      # send from the merged effective config). Left enabled, it fails
+      # liveness whenever the env-level SMTP is blank or unauthenticated,
+      # even though email is an optional, already-gracefully-degrading
+      # feature - so it must not be allowed to sink overall app health.
+      enabled: false
 
 server:
   port: ${SERVER_PORT:8080}
@@ -66,7 +93,14 @@ server:
 
 # Application-specific configuration
 app:
+  application-url: ${APPLICATION_URL:http://localhost:5173}
+  mail:
+    sender-name: ${SMTP_SENDER_NAME:KBV Education}
+    sender-email: ${SMTP_SENDER_EMAIL:}
   security:
+    # Encrypts DB-stored secrets (SMTP password). Override via env in every
+    # non-local environment, same as JWT_SECRET.
+    encryption-key: ${ENCRYPTION_KEY:change-me-local-dev-encryption-key}
     jwt:
       # NOTE: override via env in every non-local environment. Base64 or plain secret >= 32 bytes.
       secret: ${JWT_SECRET:change-me-please-use-a-long-random-secret-key-32bytes-min}
