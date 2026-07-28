@@ -4,9 +4,12 @@
 # (i.e. both under the same parent folder), matching how this project has
 # been developed. Adjust the path if your layout differs.
 #
-# Usage:
+# Usage (Podman):
 #   cp kbveducation-api/.env.example .env   # then fill in JWT_SECRET, ADMIN_PASSWORD
-#   docker compose up --build
+#   podman-compose up --build -d
+#
+# Usage (Docker):
+#   docker compose up --build -d
 
 services:
   db:
@@ -57,6 +60,9 @@ services:
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-80}:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
     depends_on:
       - backend
 
@@ -64,3 +70,4 @@ volumes:
   db_data:
   storage_data:
   log_data:
+  caddy_data:
