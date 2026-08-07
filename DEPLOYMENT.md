@@ -31,6 +31,9 @@ Edit `.env` and set at minimum:
   (`ADMIN_EMAIL`, default `admin@kbv.edu`). Also required to start.
 - `CORS_ALLOWED_ORIGINS` — the public origin the frontend will be served
   from, if not `http://localhost`.
+- `SITE_ADDRESS` — the public domain (e.g. `education.kbv.com`). Enables
+  HTTPS, which some features require outright — see
+  [HTTPS is required](#https-is-required) below.
 
 Then:
 
@@ -53,13 +56,62 @@ The `SUPER_ADMIN` account is seeded on first boot if no admin user exists yet
 Open `http://localhost` (or `$WEB_PORT`) and log in with the admin
 credentials from `.env`.
 
+## HTTPS is required
+
+Set `SITE_ADDRESS` to the public hostname in `.env`:
+
+```bash
+SITE_ADDRESS=education.kbv.com
+CORS_ALLOWED_ORIGINS=https://education.kbv.com
+APPLICATION_URL=https://education.kbv.com
+```
+
+Caddy then provisions a Let's Encrypt certificate on first boot and redirects
+`http://` → `https://` automatically. Three things this needs:
+
+- `SITE_ADDRESS` must be a **hostname, not a bare IP** — Let's Encrypt does
+  not issue certificates for IP addresses, and Caddy will fail issuance on
+  boot if you give it one.
+- The hostname's DNS `A`/`AAAA` record must already point at the host.
+- Host port **80 must map to container port 80** (the default `WEB_PORT`) —
+  Let's Encrypt's HTTP-01 challenge is answered there. If you override
+  `WEB_PORT` to something else, certificate issuance fails.
+
+### No domain yet?
+
+`sslip.io` is a public wildcard DNS service that resolves any hostname with
+an IP encoded in it back to that IP, and Let's Encrypt will certify those
+names. So a host at `143.110.184.200` can get a real, fully-trusted
+certificate with no domain purchase and no DNS configuration:
+
+```bash
+SITE_ADDRESS=143-110-184-200.sslip.io
+CORS_ALLOWED_ORIGINS=https://143-110-184-200.sslip.io
+APPLICATION_URL=https://143-110-184-200.sslip.io
+```
+
+The URL is ugly, but the certificate is genuine and every secure-context
+feature works. Swap in a real domain later by changing these three values.
+
+Serving over plain HTTP is not just a hardening gap — it disables features.
+Browsers restrict a set of "powerful" APIs to **secure contexts**, and an
+`http://` origin is not one. `localhost` is specifically exempt, which is why
+these work in local dev and then silently fail on an `http://` deployment:
+
+| Feature | API | Behaviour on plain HTTP |
+|---|---|---|
+| Reflection voice recording | `navigator.mediaDevices.getUserMedia` | `navigator.mediaDevices` is `undefined`; the recorder reports the page is not on HTTPS and falls back to file upload |
+
+Also set `CORS_ALLOWED_ORIGINS` to the `https://` origin once HTTPS is on,
+otherwise API calls from the new origin are rejected.
+
 ## How the pieces talk to each other
 
-- The **frontend** is a static build served by nginx (see `nginx.conf`).
-  It never calls the backend's container hostname directly — the browser
-  only ever talks to the frontend's own origin. nginx reverse-proxies
-  `/api/*` to `http://backend:8080/api/*` over the Docker network, mirroring
-  the `/api` proxy `vite.config.ts` uses in local dev.
+- The **frontend** is a static build served by Caddy (see `Caddyfile` in
+  `kbveducation-web`). It never calls the backend's container hostname
+  directly — the browser only ever talks to the frontend's own origin. Caddy
+  reverse-proxies `/api/*` to `http://backend:8080` over the Docker network,
+  mirroring the `/api` proxy `vite.config.ts` uses in local dev.
 - The **backend** talks to Postgres via `DB_URL=jdbc:postgresql://db:5432/...`
   (the `db` hostname resolves via Docker's internal DNS).
 - Health: `backend`'s image declares a `HEALTHCHECK` against

@@ -39,6 +39,10 @@ services:
       JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION:-900000}
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-604800000}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost}
+      # Public origin used to build links inside notification emails. Without
+      # this passthrough it falls back to application.yml's dev default
+      # (http://localhost:5173), which is unreachable for email recipients.
+      APPLICATION_URL: ${APPLICATION_URL:-http://localhost}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@kbv.edu}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set for the seeded SUPER_ADMIN}
       STORAGE_BASE_PATH: /data/storage
@@ -58,6 +62,12 @@ services:
       args:
         VITE_API_BASE_URL: /api
     restart: unless-stopped
+    environment:
+      # Public domain Caddy serves on. Setting this to a real hostname turns on
+      # automatic HTTPS, which the browser requires before it will expose
+      # getUserMedia/MediaRecorder for the reflection voice recorder.
+      # Leaving it unset serves plain HTTP on :80 and recording stays disabled.
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
     ports:
       - "${WEB_PORT:-80}:80"
       - "443:443"
