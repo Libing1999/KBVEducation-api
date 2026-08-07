@@ -24,7 +24,8 @@ public interface PracticeService {
 
     // --- student ---
     PracticeSessionResponse create(UUID studentId, LocalDate studyDate, String subject, int durationMinutes,
-                                   StudyType studyType, String notes, MultipartFile[] files);
+                                   StudyType studyType, String notes, String transcript, Integer year,
+                                   MultipartFile[] files);
 
     List<PracticeSessionResponse> getMine(UUID studentId);
 

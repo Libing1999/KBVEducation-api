@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,6 +29,12 @@ public interface PracticeSessionRepository extends JpaRepository<PracticeSession
 
     // --- Phase 4 scoring: "Full Papers" = approved past-paper sessions ---
     long countByStudent_IdAndStudyTypeAndStatusAndDeletedFalse(UUID studentId, StudyType studyType, PracticeStatus status);
+
+    long countByStudent_IdAndStudyTypeInAndStatusAndDeletedFalse(UUID studentId, Collection<StudyType> studyTypes,
+                                                                  PracticeStatus status);
+
+    // --- Subject Management: block deleting a subject still referenced by a session ---
+    boolean existsBySubjectIgnoreCaseAndDeletedFalse(String subject);
 
     // --- admin statistics ---
     long countByStudyDateAndDeletedFalse(LocalDate date);

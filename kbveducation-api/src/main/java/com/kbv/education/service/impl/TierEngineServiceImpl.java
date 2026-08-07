@@ -34,6 +34,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -64,8 +65,11 @@ public class TierEngineServiceImpl implements TierEngineService {
         User student = userRepository.findByIdAndDeletedFalse(studentId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Student", studentId));
         StudentScore score = currentScore(studentId);
-        long fullPapers = practiceSessionRepository.countByStudent_IdAndStudyTypeAndStatusAndDeletedFalse(
-                studentId, StudyType.PAST_PAPER, PracticeStatus.APPROVED);
+        // Counts both legacy PAST_PAPER rows and the current past-paper study types.
+        long fullPapers = practiceSessionRepository.countByStudent_IdAndStudyTypeInAndStatusAndDeletedFalse(
+                studentId,
+                Set.of(StudyType.PAST_PAPER, StudyType.PAST_PAPER_TEST_DAY, StudyType.PAST_PAPER_IMPROVEMENT_DAY),
+                PracticeStatus.APPROVED);
 
         TierRule matched = matchTier(score.getCompositeScore(), score.getPracticePercentage(), fullPapers);
 

@@ -20,6 +20,8 @@ public record PracticeSessionResponse(
         int durationMinutes,
         StudyType studyType,
         String notes,
+        String transcript,
+        Integer year,
         PracticeStatus status,
         String adminComment,
         String reviewedByName,

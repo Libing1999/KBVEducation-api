@@ -63,7 +63,9 @@ import java.util.UUID;
 public class ReflectionServiceImpl implements ReflectionService {
 
     private static final String SUBDIR = "reflections";
-    private static final Set<String> AUDIO_ALLOWED = Set.of("mp3", "wav", "m4a", "aac");
+    // "webm" is the container MediaRecorder produces in Chrome/Edge/Firefox for in-browser
+    // voice recording; Safari's recording is uploaded as .m4a (already allowed) instead.
+    private static final Set<String> AUDIO_ALLOWED = Set.of("mp3", "wav", "m4a", "aac", "webm");
     private static final int MAX_AUDIO_MB = 25;
     private static final int PREVIEW_LEN = 140;
     private static final List<String> SORTABLE = List.of("submittedAt", "reflectionDate", "createdAt");

@@ -49,11 +49,13 @@ public class StudentPracticeController {
             @RequestParam int durationMinutes,
             @RequestParam StudyType studyType,
             @RequestParam(required = false) String notes,
+            @RequestParam(required = false) String transcript,
+            @RequestParam(required = false) Integer year,
             @RequestParam(value = "files", required = false) MultipartFile[] files) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Practice logged",
                         practiceService.create(principal.getId(), studyDate, subject, durationMinutes,
-                                studyType, notes, files)));
+                                studyType, notes, transcript, year, files)));
     }
 
     @Operation(summary = "List my practice sessions (newest first)")

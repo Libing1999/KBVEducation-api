@@ -49,6 +49,13 @@ public class PracticeSession extends BaseEntity {
     @Column(name = "notes", columnDefinition = "text")
     private String notes;
 
+    @Column(name = "transcript", columnDefinition = "text")
+    private String transcript;
+
+    /** Only meaningful (and required) for the two past-paper study types. */
+    @Column(name = "year")
+    private Integer year;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private PracticeStatus status = PracticeStatus.PENDING_REVIEW;

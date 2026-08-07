@@ -64,6 +64,10 @@ public class PracticeServiceImpl implements PracticeService {
     private static final String SUBDIR = "practice";
     private static final Set<String> ALLOWED = Set.of("pdf", "doc", "docx", "png", "jpg", "jpeg");
     private static final int MAX_FILE_MB = 25;
+    private static final int MAX_NOTES_LEN = 2000;
+    private static final int MAX_TRANSCRIPT_LEN = 5000;
+    private static final Set<StudyType> PAST_PAPER_TYPES =
+            Set.of(StudyType.PAST_PAPER, StudyType.PAST_PAPER_TEST_DAY, StudyType.PAST_PAPER_IMPROVEMENT_DAY);
     private static final List<String> SORTABLE = List.of("studyDate", "createdAt", "status");
 
     private final PracticeSessionRepository practiceRepository;
@@ -82,7 +86,8 @@ public class PracticeServiceImpl implements PracticeService {
     @Override
     @Transactional
     public PracticeSessionResponse create(UUID studentId, LocalDate studyDate, String subject, int durationMinutes,
-                                          StudyType studyType, String notes, MultipartFile[] files) {
+                                          StudyType studyType, String notes, String transcript, Integer year,
+                                          MultipartFile[] files) {
         User student = userRepository.findByIdAndDeletedFalse(studentId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Student", studentId));
 
@@ -97,6 +102,20 @@ public class PracticeServiceImpl implements PracticeService {
         }
         if (durationMinutes <= 0) {
             throw new BadRequestException("Duration must be greater than zero");
+        }
+        if (notes != null && notes.length() > MAX_NOTES_LEN) {
+            throw new BadRequestException("Notes must be " + MAX_NOTES_LEN + " characters or fewer");
+        }
+        if (transcript != null && transcript.length() > MAX_TRANSCRIPT_LEN) {
+            throw new BadRequestException("Transcript must be " + MAX_TRANSCRIPT_LEN + " characters or fewer");
+        }
+        Integer effectiveYear = year;
+        if (isPastPaperType(studyType)) {
+            if (effectiveYear == null) {
+                throw new BadRequestException("Year is required for this study type");
+            }
+        } else {
+            effectiveYear = null;
         }
 
         // Validate attachments up-front (before storing anything).
@@ -123,6 +142,8 @@ public class PracticeServiceImpl implements PracticeService {
         session.setDurationMinutes(durationMinutes);
         session.setStudyType(studyType);
         session.setNotes(notes);
+        session.setTranscript(transcript);
+        session.setYear(effectiveYear);
         // Extension point — manual impl returns PENDING_REVIEW.
         session.setStatus(validationService.validate(session));
         PracticeSession saved = practiceRepository.save(session);
@@ -326,9 +347,9 @@ public class PracticeServiceImpl implements PracticeService {
         practiceRepository.save(session);
         notifyStudentOfDecision(session, status == PracticeStatus.APPROVED);
 
-        // Approval/rejection changes the "Full Papers" tier gate for PAST_PAPER sessions even
+        // Approval/rejection changes the "Full Papers" tier gate for past-paper sessions even
         // though it doesn't change Practice %; recalculate the tier only, best-effort.
-        if (session.getStudyType() == StudyType.PAST_PAPER) {
+        if (isPastPaperType(session.getStudyType())) {
             try {
                 tierEngineService.recalculateCalculatedTier(session.getStudent().getId());
             } catch (Exception e) {
@@ -391,6 +412,11 @@ public class PracticeServiceImpl implements PracticeService {
                 resource);
     }
 
+    /** True for any study type ("legacy" or current) that represents a past-paper session. */
+    private boolean isPastPaperType(StudyType studyType) {
+        return PAST_PAPER_TYPES.contains(studyType);
+    }
+
     private String extensionOf(String filename) {
         String ext = StringUtils.getFilenameExtension(filename);
         return ext == null ? "" : ext.toLowerCase(Locale.ROOT);
@@ -421,6 +447,8 @@ public class PracticeServiceImpl implements PracticeService {
                 s.getDurationMinutes(),
                 s.getStudyType(),
                 s.getNotes(),
+                s.getTranscript(),
+                s.getYear(),
                 s.getStatus(),
                 s.getAdminComment(),
                 s.getReviewedBy() == null ? null : s.getReviewedBy().getFullName(),
