@@ -137,9 +137,36 @@ it does on a local dev machine — without it, backups would fail silently
 inside the container despite working outside one. `pg_dump` connects to the
 `db` service over the same Docker network the app already uses.
 
-## Updating a running deployment
+## Updating a running deployment (Podman / Docker)
+
+### Podman (Production Server Setup)
+
+On production hosts running Podman (such as `deploy@143.110.184.200`):
 
 ```bash
+# 1. Check current containers
+podman ps
+
+# 2. Perform pre-deployment Database Backup
+mkdir -p ~/backups
+podman exec kbv-education_db_1 pg_dump -U postgres kbv_education > ~/backups/backup_$(date +%Y%m%d_%H%M%S).sql
+
+# 3. Pull code changes and rebuild containers
+cd ~/apps/kbv-education && git pull
+cd ~/apps/kbveducation-web && git pull
+cd ~/apps/kbv-education && podman-compose down && BUILDAH_FORMAT=docker podman-compose up --build -d
+
+# 4. View logs to confirm startup
+podman logs -f kbv-education_backend_1
+```
+
+### Docker Compose
+
+```bash
+# Database Backup
+docker exec kbv-education_db_1 pg_dump -U postgres kbv_education > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# Redeploy
 git pull   # in both kbv-education and kbveducation-web
 docker compose up --build -d
 ```
@@ -147,10 +174,62 @@ docker compose up --build -d
 Flyway only ever applies forward migrations — there's no down-migration
 step, matching how this project has always shipped schema changes.
 
-## Logs
+## Database Backup & Maintenance Setup
 
-- `docker compose logs -f backend` — combined stdout (same as the console
-  appender).
+Database backups can be taken manually via container CLI or triggered via the application's Backup module:
+
+### Manual Backup
+```bash
+# Backup using Podman
+podman exec kbv-education_db_1 pg_dump -U postgres kbv_education > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# Backup using Docker
+docker exec kbv-education_db_1 pg_dump -U postgres kbv_education > backup_$(date +%Y%m%d_%H%M%S).sql
+```
+
+### Restoring a Backup
+```bash
+# Podman database restore
+podman exec -i kbv-education_db_1 psql -U postgres kbv_education < backup_20260812_183000.sql
+
+# Docker database restore
+docker exec -i kbv-education_db_1 psql -U postgres kbv_education < backup_20260812_183000.sql
+```
+
+## Backup & Rollback Plan (Deployment Failure Recovery)
+
+If a newly deployed build has critical errors or fails health checks, follow this rollback procedure:
+
+1. **Identify Previous Working Commit**:
+   Before deployment, note the working commit hashes:
+   ```bash
+   cd ~/apps/kbv-education && git rev-parse HEAD
+   cd ~/apps/kbveducation-web && git rev-parse HEAD
+   ```
+
+2. **Revert Repositories to Previous Commit**:
+   ```bash
+   cd ~/apps/kbv-education && git checkout <PREVIOUS_KBV_EDUCATION_COMMIT>
+   cd ~/apps/kbveducation-web && git checkout <PREVIOUS_KBVEDUCATION_WEB_COMMIT>
+   ```
+
+3. **Rebuild & Restart Previous Container Stack**:
+   ```bash
+   cd ~/apps/kbv-education && podman-compose down && BUILDAH_FORMAT=docker podman-compose up --build -d
+   ```
+
+4. **Restore Database Backup (If Schema/Data Migrations Were Applied)**:
+   ```bash
+   podman exec -i kbv-education_db_1 psql -U postgres kbv_education < ~/backups/backup_YYYYMMDD_HHMMSS.sql
+   podman restart kbv-education_backend_1
+   ```
+
+## Logs & Container Troubleshooting
+
+- **Check Container Status**: `podman ps` (or `docker compose ps`)
+- **Follow Backend Logs**: `podman logs -f kbv-education_backend_1`
+- **Follow Frontend Logs**: `podman logs -f kbv-education_frontend_1`
+- **Restart Specific Service**: `podman restart kbv-education_backend_1`
 - The `log_data` volume additionally holds size-and-time-rotated log files
   (50 MB per file, 30 days / 1 GB retention) if you need something to `tail`
   outside of `docker logs`.
@@ -160,3 +239,4 @@ step, matching how this project has always shipped schema changes.
 Each repo's own README documents running directly (`mvn spring-boot:run` /
 `npm run dev`) for local development — Docker is the recommended path for
 anything beyond a laptop, but is not required.
+
