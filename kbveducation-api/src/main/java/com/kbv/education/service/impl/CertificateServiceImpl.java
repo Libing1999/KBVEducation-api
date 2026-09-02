@@ -18,6 +18,7 @@ import com.kbv.education.repository.ParentStudentRepository;
 import com.kbv.education.repository.StudentCohortRepository;
 import com.kbv.education.repository.UserRepository;
 import com.kbv.education.service.CertificateService;
+import com.kbv.education.service.ScoreEngineService;
 import com.kbv.education.service.TierEngineService;
 import com.kbv.education.service.pdf.CertificatePdfRenderer;
 import com.kbv.education.service.storage.FileStorageService;
@@ -28,6 +29,8 @@ import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.Year;
 import java.time.format.DateTimeFormatter;
@@ -52,6 +55,7 @@ public class CertificateServiceImpl implements CertificateService {
     private final StudentCohortRepository studentCohortRepository;
     private final ParentStudentRepository parentStudentRepository;
     private final TierEngineService tierEngineService;
+    private final ScoreEngineService scoreEngineService;
     private final CertificatePdfRenderer certificatePdfRenderer;
     private final FileStorageService fileStorageService;
 
@@ -79,17 +83,31 @@ public class CertificateServiceImpl implements CertificateService {
                 ? template.getInstitutionNameOverride() : DEFAULT_INSTITUTION_NAME;
         String issueDate = LocalDate.now().format(DATE_FORMAT);
 
-        Map<String, String> placeholders = Map.of(
-                "studentName", student.getFullName(),
-                "tierName", tierAtIssue == null ? "" : tierAtIssue,
-                "cohortName", membership == null ? "" : membership.getCohort().getName(),
-                "issueDate", issueDate,
-                "certificateNumber", certificateNumber);
-
-        byte[] pdf = certificatePdfRenderer.render(
-                template.getBodyTemplate(), placeholders, CertificateTitles.of(certificateType),
-                institutionName, template.getLogoPathOverride(), template.getPrimaryColorHex(),
-                student.getFullName(), certificateNumber, issueDate);
+        byte[] pdf;
+        if (isFixedKbvTierDesign(certificateType)) {
+            // The three customer-approved KBV tier designs: real per-student composite score
+            // (not the tier's default range) and the cohort/term-year footer line. bodyTemplate,
+            // institution/logo overrides and primaryColorHex do not apply to this fixed layout -
+            // see CertificatePdfRenderer's class Javadoc.
+            String compositeScoreDisplay = formatCompositeScore(scoreEngineService.getCurrent(studentId).compositeScore());
+            String cohortTermYear = membership == null ? null
+                    : membership.getCohort().getName() + " — " + membership.getCohort().getStartDate().getYear();
+            pdf = certificatePdfRenderer.renderTierCertificate(
+                    certificateType, student.getFullName(), compositeScoreDisplay, issueDate, cohortTermYear);
+        } else {
+            // CertificateType.COMPLETION: no fixed KBV design was supplied for this type, so it
+            // keeps rendering through the original admin-editable generic frame.
+            Map<String, String> placeholders = Map.of(
+                    "studentName", student.getFullName(),
+                    "tierName", tierAtIssue == null ? "" : tierAtIssue,
+                    "cohortName", membership == null ? "" : membership.getCohort().getName(),
+                    "issueDate", issueDate,
+                    "certificateNumber", certificateNumber);
+            pdf = certificatePdfRenderer.render(
+                    template.getBodyTemplate(), placeholders, CertificateTitles.of(certificateType),
+                    institutionName, template.getLogoPathOverride(), template.getPrimaryColorHex(),
+                    student.getFullName(), certificateNumber, issueDate);
+        }
 
         StoredFile stored = fileStorageService.store(
                 pdf, certificateNumber + ".pdf", "application/pdf", STORAGE_SUBDIR);
@@ -178,6 +196,15 @@ public class CertificateServiceImpl implements CertificateService {
             size = 0;
         }
         return new FileDownloadResult(fileName, "application/pdf", size, resource);
+    }
+
+    private boolean isFixedKbvTierDesign(CertificateType type) {
+        return type == CertificateType.TIER_1 || type == CertificateType.TIER_2 || type == CertificateType.TIER_3;
+    }
+
+    /** Whole-percent display for the certificate's "Composite score" field, e.g. {@code "93%"}. */
+    private String formatCompositeScore(BigDecimal compositeScore) {
+        return compositeScore.setScale(0, RoundingMode.HALF_UP).toPlainString() + "%";
     }
 
     private String generateCertificateNumber(CertificateType type) {

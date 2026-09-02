@@ -21,4 +21,16 @@ public interface ScoreEngineService {
     StudentScoreResponse getCurrent(UUID studentId);
 
     PageResponse<StudentScoreResponse> getHistory(UUID studentId, int page, int size);
+
+    /**
+     * Real trailing-window pace projection: {@code atRecentPace}/{@code last3Days} recompute the
+     * composite score using only the practice/reflection completion rate over the trailing 7 (resp.
+     * 3) days, holding homework/quiz at their current values (those aren't day-windowed). Never a
+     * fabricated/static number — every field is derived from actual student_scores/study_days data.
+     */
+    PaceProjection getPaceProjection(UUID studentId);
+
+    record PaceProjection(double now, double atRecentPace, double last3Days,
+                           Double nextTierThreshold, String nextTierName) {
+    }
 }

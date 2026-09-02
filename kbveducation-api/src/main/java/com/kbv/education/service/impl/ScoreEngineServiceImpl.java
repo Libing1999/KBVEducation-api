@@ -2,6 +2,7 @@ package com.kbv.education.service.impl;
 
 import com.kbv.education.dto.response.PageResponse;
 import com.kbv.education.dto.score.StudentScoreResponse;
+import com.kbv.education.dto.tier.CurrentTierResponse;
 import com.kbv.education.entity.Cohort;
 import com.kbv.education.entity.QuizAttempt;
 import com.kbv.education.entity.ScoreConfig;
@@ -124,6 +125,63 @@ public class ScoreEngineServiceImpl implements ScoreEngineService {
         return studentScoreRepository.findByStudent_IdAndCurrentTrueAndDeletedFalse(studentId)
                 .map(this::toResponse)
                 .orElseGet(() -> recalculate(studentId, ScoreTriggerReason.MANUAL_RECALC));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PaceProjection getPaceProjection(UUID studentId) {
+        StudentScoreResponse current = getCurrent(studentId);
+        ScoreConfig config = activeConfig();
+        Cohort cohort = studentCohortRepository.findByStudent_IdAndActiveTrueAndDeletedFalse(studentId)
+                .map(sc -> sc.getCohort())
+                .orElse(null);
+
+        BigDecimal homework = current.homeworkPercentage();
+        BigDecimal quiz = current.quizPercentage();
+        BigDecimal atRecentPace = compositeForTrailingWindow(studentId, config, cohort, 7, homework, quiz);
+        BigDecimal last3Days = compositeForTrailingWindow(studentId, config, cohort, 3, homework, quiz);
+
+        CurrentTierResponse tier = tierEngineService.getCurrentTier(studentId);
+        Double nextTierThreshold = tier.remainingRequirements().stream()
+                .filter(r -> r.metric().toLowerCase().contains("composite"))
+                .map(CurrentTierResponse.RemainingRequirement::required)
+                .findFirst()
+                .orElse(null);
+
+        return new PaceProjection(current.compositeScore().doubleValue(), atRecentPace.doubleValue(),
+                last3Days.doubleValue(), nextTierThreshold, tier.nextPossibleTier());
+    }
+
+    /** Same composite() formula as {@link #recalculate}, but Practice/Reflection use only the
+     * trailing {@code days} days instead of the full configured window — homework/quiz aren't
+     * day-windowed so they're held at their current values. */
+    private BigDecimal compositeForTrailingWindow(UUID studentId, ScoreConfig config, Cohort cohort,
+                                                    int days, BigDecimal homework, BigDecimal quiz) {
+        LocalDate today = LocalDate.now();
+        LocalDate end = cohort != null && today.isAfter(cohort.getEndDate()) ? cohort.getEndDate() : today;
+        LocalDate start = end.minusDays(days - 1L);
+
+        BigDecimal practice = cohort == null ? BigDecimal.ZERO : percentageForWindow(studentId, start, end, true);
+        BigDecimal reflection = percentageForWindow(studentId, start, end, false);
+        return composite(practice, reflection, homework, quiz, config);
+    }
+
+    /** Shared by the configured-window Practice/Reflection formulas and the trailing-window pace
+     * projection: study-days with the relevant flag / voided-excluded available days, over [start,end]. */
+    private BigDecimal percentageForWindow(UUID studentId, LocalDate start, LocalDate end, boolean practice) {
+        if (end.isBefore(start)) {
+            return BigDecimal.ZERO;
+        }
+        long totalDays = ChronoUnit.DAYS.between(start, end) + 1;
+        long voided = studyDayRepository.countByStudent_IdAndVoidedTrueAndStudyDateBetweenAndDeletedFalse(
+                studentId, start, end);
+        long available = Math.max(0, totalDays - voided);
+        long activeDays = practice
+                ? studyDayRepository.countByStudent_IdAndHasPracticeTrueAndVoidedFalseAndStudyDateBetweenAndDeletedFalse(
+                        studentId, start, end)
+                : studyDayRepository.countByStudent_IdAndHasReflectionTrueAndVoidedFalseAndStudyDateBetweenAndDeletedFalse(
+                        studentId, start, end);
+        return percentOf(activeDays, available);
     }
 
     @Override

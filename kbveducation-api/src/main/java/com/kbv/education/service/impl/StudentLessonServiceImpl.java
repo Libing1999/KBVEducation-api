@@ -84,20 +84,42 @@ public class StudentLessonServiceImpl implements StudentLessonService {
     public StudentLessonDetailResponse getLessonDetail(UUID userId, UUID lessonId) {
         UUID studentId = resolveStudentId(userId);
         Lesson lesson = accessibleLesson(studentId, lessonId);
+        return toDetail(lesson, studentId);
+    }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<StudentLessonDetailResponse> getTodayLesson(UUID userId) {
+        UUID studentId = resolveStudentId(userId);
+        UUID cohortId = activeCohortId(studentId).orElse(null);
+        if (cohortId == null) {
+            return Optional.empty();
+        }
+
+        Specification<Lesson> spec = Specification.where(LessonSpecifications.notDeleted())
+                .and(LessonSpecifications.inCohort(cohortId))
+                .and(LessonSpecifications.hasStatus(LessonStatus.PUBLISHED))
+                .and(LessonSpecifications.onDate(java.time.LocalDate.now()));
+
+        return lessonRepository.findAll(spec).stream()
+                .findFirst()
+                .map(lesson -> toDetail(lesson, studentId));
+    }
+
+    private StudentLessonDetailResponse toDetail(Lesson lesson, UUID studentId) {
         List<com.kbv.education.dto.file.FileResponse> files =
-                lessonFileRepository.findByLesson_IdAndDeletedFalseOrderByUploadedDateAsc(lessonId).stream()
+                lessonFileRepository.findByLesson_IdAndDeletedFalseOrderByUploadedDateAsc(lesson.getId()).stream()
                         .map(fileMapper::toResponse)
                         .toList();
 
-        Optional<Quiz> quiz = quizRepository.findByLesson_IdAndDeletedFalse(lessonId)
+        Optional<Quiz> quiz = quizRepository.findByLesson_IdAndDeletedFalse(lesson.getId())
                 .filter(Quiz::isPublished);
         boolean hasQuiz = quiz.isPresent();
         boolean quizCompleted = quiz
                 .map(q -> quizAttemptRepository.existsByQuiz_IdAndStudent_IdAndDeletedFalse(q.getId(), studentId))
                 .orElse(false);
 
-        Optional<Homework> homework = homeworkRepository.findByLesson_IdAndDeletedFalse(lessonId);
+        Optional<Homework> homework = homeworkRepository.findByLesson_IdAndDeletedFalse(lesson.getId());
         boolean hasHomework = homework.isPresent();
         boolean homeworkSubmitted = homework
                 .map(h -> homeworkSubmissionRepository

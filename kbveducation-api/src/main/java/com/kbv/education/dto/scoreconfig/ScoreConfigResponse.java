@@ -19,6 +19,7 @@ public record ScoreConfigResponse(
         int totalHomeworkCount,
         boolean leaderboardEnabled,
         LeaderboardSortField leaderboardSortBy,
-        boolean dashboardWidgetsEnabled
+        boolean dashboardWidgetsEnabled,
+        int publicTopN
 ) {
 }

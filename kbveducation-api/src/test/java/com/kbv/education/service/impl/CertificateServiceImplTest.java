@@ -9,12 +9,14 @@ import com.kbv.education.entity.enums.CertificateType;
 import com.kbv.education.entity.enums.RoleType;
 import com.kbv.education.exception.BusinessRuleException;
 import com.kbv.education.exception.ResourceNotFoundException;
+import com.kbv.education.dto.score.StudentScoreResponse;
 import com.kbv.education.mapper.CertificateMapper;
 import com.kbv.education.repository.CertificateRepository;
 import com.kbv.education.repository.CertificateTemplateRepository;
 import com.kbv.education.repository.ParentStudentRepository;
 import com.kbv.education.repository.StudentCohortRepository;
 import com.kbv.education.repository.UserRepository;
+import com.kbv.education.service.ScoreEngineService;
 import com.kbv.education.service.TierEngineService;
 import com.kbv.education.service.pdf.CertificatePdfRenderer;
 import com.kbv.education.service.storage.FileStorageService;
@@ -27,6 +29,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -57,6 +60,7 @@ class CertificateServiceImplTest {
     @Mock private StudentCohortRepository studentCohortRepository;
     @Mock private ParentStudentRepository parentStudentRepository;
     @Mock private TierEngineService tierEngineService;
+    @Mock private ScoreEngineService scoreEngineService;
     @Mock private CertificatePdfRenderer certificatePdfRenderer;
     @Mock private FileStorageService fileStorageService;
 
@@ -93,10 +97,14 @@ class CertificateServiceImplTest {
         when(studentCohortRepository.findByStudent_IdAndActiveTrueAndDeletedFalse(student.getId()))
                 .thenReturn(Optional.empty());
         lenient().when(tierEngineService.getDisplayTier(student.getId())).thenReturn("Tier 1");
+        lenient().when(scoreEngineService.getCurrent(student.getId())).thenReturn(
+                new StudentScoreResponse(UUID.randomUUID(), student.getId(), BigDecimal.valueOf(90),
+                        BigDecimal.valueOf(90), BigDecimal.valueOf(90), BigDecimal.valueOf(90),
+                        BigDecimal.valueOf(93), null));
 
         byte[] fakePdf = "fake-pdf-bytes".getBytes();
-        when(certificatePdfRenderer.render(anyString(), anyMap(), anyString(), anyString(), any(), anyString(),
-                anyString(), anyString(), anyString())).thenReturn(fakePdf);
+        when(certificatePdfRenderer.renderTierCertificate(any(), anyString(), anyString(), anyString(), any()))
+                .thenReturn(fakePdf);
 
         StoredFile storedFile = new StoredFile("KBV-STORED.pdf", "KBV-STORED.pdf", "application/pdf", fakePdf.length);
         when(fileStorageService.store(any(byte[].class), anyString(), any(), any())).thenReturn(storedFile);
@@ -115,6 +123,37 @@ class CertificateServiceImplTest {
         assertThat(savedCertificate.getValue().getCertificateType()).isEqualTo(CertificateType.TIER_1);
         assertThat(savedCertificate.getValue().getFilePath()).isEqualTo("certificates/KBV-STORED.pdf");
         assertThat(response.certificateNumber()).isEqualTo("KBV-2026-T1-ABCDEF12");
+    }
+
+    @Test
+    void completionCertificatesStillUseTheLegacyGenericTemplate() {
+        template.setCertificateType(CertificateType.COMPLETION);
+
+        when(userRepository.findByIdAndDeletedFalse(student.getId())).thenReturn(Optional.of(student));
+        when(certificateTemplateRepository.findByCertificateTypeAndActiveTrueAndDeletedFalse(CertificateType.COMPLETION))
+                .thenReturn(Optional.of(template));
+        when(studentCohortRepository.findByStudent_IdAndActiveTrueAndDeletedFalse(student.getId()))
+                .thenReturn(Optional.empty());
+        lenient().when(tierEngineService.getDisplayTier(student.getId())).thenReturn("Tier 1");
+
+        byte[] fakePdf = "fake-pdf-bytes".getBytes();
+        when(certificatePdfRenderer.render(anyString(), anyMap(), anyString(), anyString(), any(), anyString(),
+                anyString(), anyString(), anyString())).thenReturn(fakePdf);
+
+        StoredFile storedFile = new StoredFile("KBV-STORED.pdf", "KBV-STORED.pdf", "application/pdf", fakePdf.length);
+        when(fileStorageService.store(any(byte[].class), anyString(), any(), any())).thenReturn(storedFile);
+
+        when(certificateRepository.save(any(Certificate.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(certificateMapper.toResponse(any(Certificate.class))).thenReturn(
+                new CertificateResponse(UUID.randomUUID(), student.getId(), "Jane Doe",
+                        CertificateType.COMPLETION, "KBV-2026-COC-ABCDEF12", null, "Tier 1", null, null));
+
+        certificateService.generate(student.getId(), CertificateType.COMPLETION);
+
+        verify(certificatePdfRenderer).render(anyString(), anyMap(), anyString(), anyString(), any(),
+                anyString(), anyString(), anyString(), anyString());
+        verify(certificatePdfRenderer, never())
+                .renderTierCertificate(any(), anyString(), anyString(), anyString(), any());
     }
 
     @Test

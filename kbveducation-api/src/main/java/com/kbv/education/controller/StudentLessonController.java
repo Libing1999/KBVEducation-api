@@ -49,6 +49,12 @@ public class StudentLessonController {
         return ApiResponse.success(studentLessonService.getLessonDetail(principal.getId(), id));
     }
 
+    @Operation(summary = "Get today's lesson, if any — null when there is no lesson scheduled today")
+    @GetMapping("/today")
+    public ApiResponse<StudentLessonDetailResponse> today(@AuthenticationPrincipal UserPrincipal principal) {
+        return ApiResponse.success(studentLessonService.getTodayLesson(principal.getId()).orElse(null));
+    }
+
     @Operation(summary = "Download a lesson file")
     @GetMapping("/{lessonId}/files/{fileId}/download")
     public ResponseEntity<Resource> download(

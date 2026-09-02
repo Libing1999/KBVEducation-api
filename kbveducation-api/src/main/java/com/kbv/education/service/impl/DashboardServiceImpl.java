@@ -23,7 +23,9 @@ import com.kbv.education.repository.QuizAttemptRepository;
 import com.kbv.education.repository.ReflectionEntryRepository;
 import com.kbv.education.repository.StudentCohortRepository;
 import com.kbv.education.repository.StudentScoreRepository;
+import com.kbv.education.repository.StudyDayRepository;
 import com.kbv.education.repository.UserRepository;
+import com.kbv.education.entity.StudyDay;
 import com.kbv.education.repository.UserSessionRepository;
 import com.kbv.education.service.DashboardService;
 import com.kbv.education.service.ScoreEngineService;
@@ -62,6 +64,8 @@ public class DashboardServiceImpl implements DashboardService {
     private final HomeworkSubmissionRepository homeworkSubmissionRepository;
     private final QuizAttemptRepository quizAttemptRepository;
     private final StudentScoreRepository studentScoreRepository;
+    private final StudyDayRepository studyDayRepository;
+    private final com.kbv.education.repository.ScoreConfigRepository scoreConfigRepository;
     private final UserMapper userMapper;
     private final CohortMapper cohortMapper;
     private final ScoreEngineService scoreEngineService;
@@ -184,7 +188,7 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public ScoreDashboardResponse studentDashboard(UUID studentUserId) {
         User student = userRepository.findByIdAndDeletedFalse(studentUserId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Student", studentUserId));
@@ -192,7 +196,7 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public ScoreDashboardResponse parentDashboard(UUID parentUserId) {
         User student = parentStudentRepository.findByParent_IdAndDeletedFalse(parentUserId)
                 .map(link -> link.getStudent())
@@ -200,15 +204,30 @@ public class DashboardServiceImpl implements DashboardService {
         return buildScoreDashboard(student);
     }
 
+    private static final int ATTENDANCE_WINDOW_DAYS = 30;
+
     private ScoreDashboardResponse buildScoreDashboard(User student) {
         ScoreDashboardResponse.CohortInfo cohortInfo = studentCohortRepository
                 .findByStudent_IdAndActiveTrueAndDeletedFalse(student.getId())
                 .map(sc -> new ScoreDashboardResponse.CohortInfo(
-                        sc.getCohort().getName(), sc.getCohort().getStatus().name()))
+                        sc.getCohort().getName(), sc.getCohort().getStatus().name(), sc.getCohort().getExamDate()))
                 .orElse(null);
 
         StudentScoreResponse score = scoreEngineService.getCurrent(student.getId());
         String displayTier = tierEngineService.getDisplayTier(student.getId());
+
+        ScoreEngineService.PaceProjection paceProjection = scoreEngineService.getPaceProjection(student.getId());
+        ScoreDashboardResponse.PaceProjection pace = new ScoreDashboardResponse.PaceProjection(
+                paceProjection.now(), paceProjection.atRecentPace(), paceProjection.last3Days(),
+                paceProjection.nextTierThreshold(), paceProjection.nextTierName());
+
+        List<ScoreDashboardResponse.AttendanceDay> attendance = buildAttendance(student.getId());
+
+        ScoreDashboardResponse.Weights weights = scoreConfigRepository.findByActiveTrueAndDeletedFalse()
+                .map(c -> new ScoreDashboardResponse.Weights(
+                        c.getPracticeWeight().doubleValue(), c.getReflectionWeight().doubleValue(),
+                        c.getHomeworkWeight().doubleValue(), c.getQuizWeight().doubleValue()))
+                .orElse(new ScoreDashboardResponse.Weights(0, 0, 0, 0));
 
         List<ScoreDashboardResponse.LessonPlaceholder> lessons = List.of(
                 new ScoreDashboardResponse.LessonPlaceholder("Module 3: Comprehension", "2026-07-15T10:00:00Z"),
@@ -229,6 +248,31 @@ public class DashboardServiceImpl implements DashboardService {
                 score.quizPercentage().doubleValue(),
                 displayTier,
                 lessons,
-                notifications);
+                notifications,
+                pace,
+                attendance,
+                weights);
+    }
+
+    /** Last {@link #ATTENDANCE_WINDOW_DAYS} calendar days, one row per day — "active" means the
+     * student practiced or reflected that day; voided (admin-excused) days are flagged separately
+     * so the frontend can exclude them from the "showed up" denominator rather than counting them
+     * as a miss. */
+    private List<ScoreDashboardResponse.AttendanceDay> buildAttendance(UUID studentId) {
+        LocalDate today = LocalDate.now();
+        LocalDate start = today.minusDays(ATTENDANCE_WINDOW_DAYS - 1L);
+        List<StudyDay> days = studyDayRepository
+                .findByStudent_IdAndStudyDateBetweenAndDeletedFalseOrderByStudyDateAsc(studentId, start, today);
+        java.util.Map<LocalDate, StudyDay> byDate = new java.util.HashMap<>();
+        days.forEach(d -> byDate.put(d.getStudyDate(), d));
+
+        List<ScoreDashboardResponse.AttendanceDay> result = new ArrayList<>();
+        for (LocalDate day = start; !day.isAfter(today); day = day.plusDays(1)) {
+            StudyDay sd = byDate.get(day);
+            boolean active = sd != null && !sd.isVoided() && (sd.isHasPractice() || sd.isHasReflection());
+            boolean voided = sd != null && sd.isVoided();
+            result.add(new ScoreDashboardResponse.AttendanceDay(day, active, voided));
+        }
+        return result;
     }
 }
