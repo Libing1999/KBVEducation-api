@@ -145,7 +145,7 @@ public class CertificatePdfRenderer {
               <div style="margin-top:20px; font-family:'EB Garamond','Garamond','Cambria',Georgia,serif; font-style:italic; font-size:16px; color:#9CABC1; text-align:center;">This certifies that</div>
               <div style="margin-top:10px; font-family:'EB Garamond','Garamond','Cambria',Georgia,serif; font-weight:500; font-size:4rem; line-height:1.05; letter-spacing:-0.01em; color:#F2F6FA; text-align:center;">@@STUDENT_NAME@@</div>
               <div style="margin:12px auto 0; width:52px; height:1.5px; background:#C4972A;"></div>
-              <div style="margin-top:18px; font-family:'General Sans',system-ui,sans-serif; font-size:15px; line-height:1.5; color:#B6C1D2; max-width:460px; margin-left:auto; margin-right:auto; text-align:center;">has completed the KBV Foundations Program for MYP at the highest level of Graduation</div>
+              <div style="margin-top:18px; font-family:'General Sans',system-ui,sans-serif; font-size:15px; line-height:1.5; color:#B6C1D2; width:460px; margin-left:auto; margin-right:auto; text-align:center;">has completed the KBV Foundations Program for MYP at the highest level of Graduation</div>
               <div style="margin-top:12px; font-family:'General Sans',system-ui,sans-serif; font-size:10px; font-weight:500; letter-spacing:0.14em; text-transform:uppercase; color:#7589A7; text-align:center;">Mindset · Time &amp; environment · Study systems — completed</div>
               <div style="margin-top:20px; text-align:center;">
                 <div style="font-family:'General Sans',system-ui,sans-serif; font-size:9px; letter-spacing:0.16em; text-transform:uppercase; color:#7589A7;">Composite score</div>
@@ -191,7 +191,7 @@ public class CertificatePdfRenderer {
               <div style="margin-top:20px; font-family:'EB Garamond','Garamond','Cambria',Georgia,serif; font-style:italic; font-size:16px; color:#9CABC1; text-align:center;">This certifies that</div>
               <div style="margin-top:10px; font-family:'EB Garamond','Garamond','Cambria',Georgia,serif; font-weight:500; font-size:4rem; line-height:1.05; letter-spacing:-0.01em; color:#F2F6FA; text-align:center;">@@STUDENT_NAME@@</div>
               <div style="margin:12px auto 0; width:52px; height:1.5px; background:#C4972A;"></div>
-              <div style="margin-top:18px; font-family:'General Sans',system-ui,sans-serif; font-size:15px; line-height:1.5; color:#B6C1D2; max-width:460px; margin-left:auto; margin-right:auto; text-align:center;">has completed the KBV Method — mindset, time and environment, study systems — taught in person, one cohort at a time.</div>
+              <div style="margin-top:18px; font-family:'General Sans',system-ui,sans-serif; font-size:15px; line-height:1.5; color:#B6C1D2; width:460px; margin-left:auto; margin-right:auto; text-align:center;">has completed the KBV Method — mindset, time and environment, study systems — taught in person, one cohort at a time.</div>
               <div style="margin-top:12px; font-family:'General Sans',system-ui,sans-serif; font-size:10px; font-weight:500; letter-spacing:0.14em; text-transform:uppercase; color:#7589A7; text-align:center;">Mindset · Time &amp; environment · Study systems — completed</div>
               <div style="margin-top:20px; text-align:center;">
                 <div style="font-family:'General Sans',system-ui,sans-serif; font-size:9px; letter-spacing:0.16em; text-transform:uppercase; color:#7589A7;">Composite score</div>
@@ -237,7 +237,7 @@ public class CertificatePdfRenderer {
               <div style="margin-top:20px; font-family:'EB Garamond','Garamond','Cambria',Georgia,serif; font-style:italic; font-size:16px; color:#4A5568; text-align:center;">This certifies that</div>
               <div style="margin-top:10px; font-family:'EB Garamond','Garamond','Cambria',Georgia,serif; font-weight:500; font-size:4rem; line-height:1.05; letter-spacing:-0.01em; color:#1B3A6B; text-align:center;">@@STUDENT_NAME@@</div>
               <div style="margin:12px auto 0; width:52px; height:1.5px; background:#1B3A6B;"></div>
-              <div style="margin-top:18px; font-family:'General Sans',system-ui,sans-serif; font-size:15px; line-height:1.5; color:#232c3b; max-width:460px; margin-left:auto; margin-right:auto; text-align:center;">has completed the KBV Method — mindset, time and environment, study systems — taught in person, one cohort at a time.</div>
+              <div style="margin-top:18px; font-family:'General Sans',system-ui,sans-serif; font-size:15px; line-height:1.5; color:#232c3b; width:460px; margin-left:auto; margin-right:auto; text-align:center;">has completed the KBV Method — mindset, time and environment, study systems — taught in person, one cohort at a time.</div>
               <div style="margin-top:12px; font-family:'General Sans',system-ui,sans-serif; font-size:10px; font-weight:500; letter-spacing:0.14em; text-transform:uppercase; color:#8A93A3; text-align:center;">Mindset · Time &amp; environment · Study systems — completed</div>
               <div style="margin-top:20px; text-align:center;">
                 <div style="font-family:'General Sans',system-ui,sans-serif; font-size:9px; letter-spacing:0.16em; text-transform:uppercase; color:#8A93A3;">Composite score</div>

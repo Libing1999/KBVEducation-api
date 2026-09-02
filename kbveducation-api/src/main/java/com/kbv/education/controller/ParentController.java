@@ -68,17 +68,17 @@ public class ParentController {
         return ApiResponse.success("Parent updated", parentService.update(id, request));
     }
 
-    @Operation(summary = "Link a parent to a student")
+    @Operation(summary = "Link a parent to an additional student")
     @PostMapping("/{id}/student")
     public ApiResponse<ParentResponse> linkStudent(@PathVariable UUID id,
                                                    @Valid @RequestBody LinkStudentRequest request) {
         return ApiResponse.success("Student linked", parentService.linkStudent(id, request));
     }
 
-    @Operation(summary = "Unlink a parent's student")
-    @DeleteMapping("/{id}/student")
-    public ApiResponse<Void> unlinkStudent(@PathVariable UUID id) {
-        parentService.unlinkStudent(id);
+    @Operation(summary = "Unlink one of a parent's students")
+    @DeleteMapping("/{id}/student/{studentId}")
+    public ApiResponse<Void> unlinkStudent(@PathVariable UUID id, @PathVariable UUID studentId) {
+        parentService.unlinkStudent(id, studentId);
         return ApiResponse.success("Student unlinked");
     }
 

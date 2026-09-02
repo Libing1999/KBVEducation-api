@@ -9,9 +9,11 @@ import com.kbv.education.entity.ScoreConfig;
 import com.kbv.education.entity.StudentScore;
 import com.kbv.education.entity.User;
 import com.kbv.education.entity.enums.AttemptStatus;
+import com.kbv.education.entity.enums.CohortDayType;
 import com.kbv.education.entity.enums.CohortStatus;
 import com.kbv.education.entity.enums.ScoreTriggerReason;
 import com.kbv.education.exception.ResourceNotFoundException;
+import com.kbv.education.repository.CohortDayRepository;
 import com.kbv.education.repository.CohortRepository;
 import com.kbv.education.repository.HomeworkSubmissionRepository;
 import com.kbv.education.repository.QuizAttemptRepository;
@@ -57,6 +59,7 @@ public class ScoreEngineServiceImpl implements ScoreEngineService {
     private final StudentCohortRepository studentCohortRepository;
     private final StudentScoreRepository studentScoreRepository;
     private final StudyDayRepository studyDayRepository;
+    private final CohortDayRepository cohortDayRepository;
     private final HomeworkSubmissionRepository homeworkSubmissionRepository;
     private final QuizAttemptRepository quizAttemptRepository;
     private final TierEngineService tierEngineService;
@@ -73,7 +76,7 @@ public class ScoreEngineServiceImpl implements ScoreEngineService {
                 .orElse(null);
 
         BigDecimal practice = practicePercentage(studentId, config, cohort);
-        BigDecimal reflection = reflectionPercentage(studentId, config);
+        BigDecimal reflection = reflectionPercentage(studentId, config, cohort);
         BigDecimal homework = homeworkPercentage(studentId, config);
         BigDecimal quiz = quizPercentage(studentId);
         BigDecimal composite = composite(practice, reflection, homework, quiz, config);
@@ -161,21 +164,24 @@ public class ScoreEngineServiceImpl implements ScoreEngineService {
         LocalDate end = cohort != null && today.isAfter(cohort.getEndDate()) ? cohort.getEndDate() : today;
         LocalDate start = end.minusDays(days - 1L);
 
-        BigDecimal practice = cohort == null ? BigDecimal.ZERO : percentageForWindow(studentId, start, end, true);
-        BigDecimal reflection = percentageForWindow(studentId, start, end, false);
+        UUID cohortId = cohort == null ? null : cohort.getId();
+        BigDecimal practice = cohort == null ? BigDecimal.ZERO : percentageForWindow(studentId, cohortId, start, end, true);
+        BigDecimal reflection = percentageForWindow(studentId, cohortId, start, end, false);
         return composite(practice, reflection, homework, quiz, config);
     }
 
     /** Shared by the configured-window Practice/Reflection formulas and the trailing-window pace
-     * projection: study-days with the relevant flag / voided-excluded available days, over [start,end]. */
-    private BigDecimal percentageForWindow(UUID studentId, LocalDate start, LocalDate end, boolean practice) {
+     * projection: study-days with the relevant flag / voided-excluded available days, over [start,end].
+     * {@code cohortId} may be null (no active cohort) — Rest/Skip day exclusion is then skipped. */
+    private BigDecimal percentageForWindow(UUID studentId, UUID cohortId, LocalDate start, LocalDate end, boolean practice) {
         if (end.isBefore(start)) {
             return BigDecimal.ZERO;
         }
         long totalDays = ChronoUnit.DAYS.between(start, end) + 1;
         long voided = studyDayRepository.countByStudent_IdAndVoidedTrueAndStudyDateBetweenAndDeletedFalse(
                 studentId, start, end);
-        long available = Math.max(0, totalDays - voided);
+        long nonLessonDays = nonLessonDayCount(cohortId, start, end);
+        long available = Math.max(0, totalDays - voided - nonLessonDays);
         long activeDays = practice
                 ? studyDayRepository.countByStudent_IdAndHasPracticeTrueAndVoidedFalseAndStudyDateBetweenAndDeletedFalse(
                         studentId, start, end)
@@ -209,7 +215,8 @@ public class ScoreEngineServiceImpl implements ScoreEngineService {
         long totalDays = ChronoUnit.DAYS.between(start, end) + 1;
         long voided = studyDayRepository.countByStudent_IdAndVoidedTrueAndStudyDateBetweenAndDeletedFalse(
                 studentId, start, end);
-        long available = Math.max(0, totalDays - voided);
+        long nonLessonDays = nonLessonDayCount(cohort.getId(), start, end);
+        long available = Math.max(0, totalDays - voided - nonLessonDays);
         long studyDays = studyDayRepository
                 .countByStudent_IdAndHasPracticeTrueAndVoidedFalseAndStudyDateBetweenAndDeletedFalse(
                         studentId, start, end);
@@ -217,7 +224,7 @@ public class ScoreEngineServiceImpl implements ScoreEngineService {
     }
 
     /** Reflection Days / Total Reflection Days x 100, where eligible days fall in the reflection window. */
-    private BigDecimal reflectionPercentage(UUID studentId, ScoreConfig config) {
+    private BigDecimal reflectionPercentage(UUID studentId, ScoreConfig config, Cohort cohort) {
         LocalDate start = config.getReflectionWindowStart();
         LocalDate end = config.getReflectionWindowEnd();
         long available = config.getTotalReflectionDays();
@@ -226,11 +233,22 @@ public class ScoreEngineServiceImpl implements ScoreEngineService {
         }
         long voided = studyDayRepository.countByStudent_IdAndVoidedTrueAndStudyDateBetweenAndDeletedFalse(
                 studentId, start, end);
-        available = Math.max(0, available - voided);
+        long nonLessonDays = nonLessonDayCount(cohort == null ? null : cohort.getId(), start, end);
+        available = Math.max(0, available - voided - nonLessonDays);
         long reflectionDays = studyDayRepository
                 .countByStudent_IdAndHasReflectionTrueAndVoidedFalseAndStudyDateBetweenAndDeletedFalse(
                         studentId, start, end);
         return percentOf(reflectionDays, available);
+    }
+
+    /** Rest/Skip days configured for this cohort within [start,end] — excluded from the scoring
+     * "available days" denominator the same way a voided day is. Zero when there's no active cohort. */
+    private long nonLessonDayCount(UUID cohortId, LocalDate start, LocalDate end) {
+        if (cohortId == null) {
+            return 0;
+        }
+        return cohortDayRepository.countByCohort_IdAndDayTypeInAndDateBetweenAndDeletedFalse(
+                cohortId, CohortDayType.NON_LESSON_TYPES, start, end);
     }
 
     /** Submitted Homework / Total Homework x 100. */

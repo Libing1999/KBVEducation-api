@@ -5,6 +5,7 @@ import com.kbv.education.dto.certificate.CertificateResponse;
 import com.kbv.education.dto.file.FileDownloadResult;
 import com.kbv.education.entity.Certificate;
 import com.kbv.education.entity.CertificateTemplate;
+import com.kbv.education.entity.ParentStudent;
 import com.kbv.education.entity.StudentCohort;
 import com.kbv.education.entity.User;
 import com.kbv.education.entity.enums.CertificateType;
@@ -147,8 +148,8 @@ public class CertificateServiceImpl implements CertificateService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<CertificateResponse> listForParent(UUID parentId) {
-        return listForStudent(resolveLinkedStudentId(parentId));
+    public List<CertificateResponse> listForParent(UUID parentId, UUID requestedStudentId) {
+        return listForStudent(resolveLinkedStudentId(parentId, requestedStudentId));
     }
 
     @Override
@@ -169,15 +170,25 @@ public class CertificateServiceImpl implements CertificateService {
 
     @Override
     @Transactional(readOnly = true)
-    public FileDownloadResult downloadForParent(UUID parentId, UUID certificateId) {
-        UUID linkedStudentId = resolveLinkedStudentId(parentId);
+    public FileDownloadResult downloadForParent(UUID parentId, UUID certificateId, UUID requestedStudentId) {
+        UUID linkedStudentId = resolveLinkedStudentId(parentId, requestedStudentId);
         return downloadForStudent(linkedStudentId, certificateId);
     }
 
-    private UUID resolveLinkedStudentId(UUID parentId) {
-        return parentStudentRepository.findByParent_IdAndDeletedFalse(parentId)
+    private UUID resolveLinkedStudentId(UUID parentId, UUID requestedStudentId) {
+        List<ParentStudent> links =
+                parentStudentRepository.findAllByParent_IdAndDeletedFalseOrderByCreatedAtAsc(parentId);
+        if (links.isEmpty()) {
+            throw new BusinessRuleException("No student is linked to this parent account");
+        }
+        if (requestedStudentId == null) {
+            return links.get(0).getStudent().getId();
+        }
+        return links.stream()
                 .map(ps -> ps.getStudent().getId())
-                .orElseThrow(() -> new BusinessRuleException("No student is linked to this parent account"));
+                .filter(id -> id.equals(requestedStudentId))
+                .findFirst()
+                .orElseThrow(() -> new BusinessRuleException("This student is not linked to your account"));
     }
 
     private Certificate getCertificate(UUID certificateId) {

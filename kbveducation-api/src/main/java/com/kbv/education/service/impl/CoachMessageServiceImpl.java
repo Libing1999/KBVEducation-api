@@ -135,10 +135,19 @@ public class CoachMessageServiceImpl implements CoachMessageService {
 
     @Override
     @Transactional
-    public List<ParentMessageResponse> listForParent(UUID parentUserId) {
-        User student = parentStudentRepository.findByParent_IdAndDeletedFalse(parentUserId)
-                .map(link -> link.getStudent())
-                .orElseThrow(() -> new BusinessRuleException("No student is linked to this parent account"));
+    public List<ParentMessageResponse> listForParent(UUID parentUserId, UUID requestedStudentId) {
+        List<com.kbv.education.entity.ParentStudent> links =
+                parentStudentRepository.findAllByParent_IdAndDeletedFalseOrderByCreatedAtAsc(parentUserId);
+        if (links.isEmpty()) {
+            throw new BusinessRuleException("No student is linked to this parent account");
+        }
+        User student = requestedStudentId == null
+                ? links.get(0).getStudent()
+                : links.stream()
+                        .map(com.kbv.education.entity.ParentStudent::getStudent)
+                        .filter(s -> s.getId().equals(requestedStudentId))
+                        .findFirst()
+                        .orElseThrow(() -> new BusinessRuleException("This student is not linked to your account"));
 
         List<CoachMessage> messages = messagesForStudent(student.getId()).stream()
                 .limit(PARENT_MESSAGE_LIMIT)

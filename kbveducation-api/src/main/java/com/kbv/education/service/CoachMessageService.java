@@ -30,10 +30,11 @@ public interface CoachMessageService {
     void markReadForStudent(UUID studentId, UUID messageId);
 
     /**
-     * Messages addressed to the parent's linked student (individually or via
-     * their cohort), newest first, capped to a handful of recent notes. The
-     * student is resolved server-side from the parent's own link — a parent
-     * can never fetch another student's messages.
+     * Messages addressed to one of the parent's linked students (individually or via
+     * their cohort), newest first, capped to a handful of recent notes. The student is
+     * resolved and validated server-side against the parent's own links — a parent can
+     * never fetch another student's messages. {@code requestedStudentId} selects which
+     * child for a multi-child parent; null defaults to their first-linked child.
      */
-    List<ParentMessageResponse> listForParent(UUID parentUserId);
+    List<ParentMessageResponse> listForParent(UUID parentUserId, UUID requestedStudentId);
 }

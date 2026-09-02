@@ -95,22 +95,21 @@ public class ParentServiceImpl implements ParentService {
 
     @Override
     @Transactional
-    public void unlinkStudent(UUID parentId) {
+    public void unlinkStudent(UUID parentId, UUID studentId) {
         getParent(parentId);
-        parentStudentRepository.findByParent_IdAndDeletedFalse(parentId)
-                .ifPresent(link -> {
-                    link.setDeleted(true);
-                    parentStudentRepository.save(link);
-                    log.info("Unlinked parent {} from student {}", parentId, link.getStudent().getId());
-                });
+        ParentStudent link = parentStudentRepository.findByParent_IdAndStudent_IdAndDeletedFalse(parentId, studentId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Parent-student link", parentId));
+        link.setDeleted(true);
+        parentStudentRepository.save(link);
+        log.info("Unlinked parent {} from student {}", parentId, studentId);
     }
 
     @Override
     @Transactional
     public void softDelete(UUID id) {
         User parent = getParent(id);
-        parentStudentRepository.findByParent_IdAndDeletedFalse(id)
-                .ifPresent(link -> {
+        parentStudentRepository.findAllByParent_IdAndDeletedFalseOrderByCreatedAtAsc(id)
+                .forEach(link -> {
                     link.setDeleted(true);
                     parentStudentRepository.save(link);
                 });
@@ -120,15 +119,10 @@ public class ParentServiceImpl implements ParentService {
         log.info("Soft-deleted parent {}", parent.getEmail());
     }
 
-    /** Link a parent to a student, replacing any existing (single) link. */
+    /** Links a parent to an additional student; a no-op if already linked to that student. */
     private void linkInternal(User parent, User student) {
-        var existing = parentStudentRepository.findByParent_IdAndDeletedFalse(parent.getId());
-        if (existing.isPresent()) {
-            if (existing.get().getStudent().getId().equals(student.getId())) {
-                return; // already linked to this student
-            }
-            existing.get().setDeleted(true);
-            parentStudentRepository.saveAndFlush(existing.get());
+        if (parentStudentRepository.existsByParent_IdAndStudent_IdAndDeletedFalse(parent.getId(), student.getId())) {
+            return; // already linked to this student
         }
 
         ParentStudent link = new ParentStudent();
@@ -139,13 +133,13 @@ public class ParentServiceImpl implements ParentService {
     }
 
     private ParentResponse toResponse(User parent) {
-        ParentResponse.StudentRef studentRef = parentStudentRepository
-                .findByParent_IdAndDeletedFalse(parent.getId())
+        List<ParentResponse.StudentRef> students = parentStudentRepository
+                .findAllByParent_IdAndDeletedFalseOrderByCreatedAtAsc(parent.getId()).stream()
                 .map(link -> {
                     User s = link.getStudent();
                     return new ParentResponse.StudentRef(s.getId(), s.getFirstName(), s.getLastName(), s.getEmail());
                 })
-                .orElse(null);
+                .toList();
 
         return new ParentResponse(
                 parent.getId(),
@@ -154,7 +148,7 @@ public class ParentServiceImpl implements ParentService {
                 parent.getLastName(),
                 parent.getPhone(),
                 parent.getStatus(),
-                studentRef,
+                students,
                 parent.getLastLoginAt(),
                 parent.getCreatedAt());
     }

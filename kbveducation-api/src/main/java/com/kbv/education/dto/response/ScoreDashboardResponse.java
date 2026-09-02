@@ -42,8 +42,9 @@ public record ScoreDashboardResponse(
                                   Double nextTierThreshold, String nextTierName) {
     }
 
-    /** One calendar day in the last 30 for the consistency grid. {@code voided} days (admin-excused,
-     * e.g. a cohort holiday) are excluded from the "showed up" denominator on the frontend. */
-    public record AttendanceDay(LocalDate date, boolean active, boolean voided) {
+    /** One calendar day in the last 30 for the consistency grid. {@code voided} days (admin-excused
+     * for this student) and {@code restOrSkip} days (cohort-configured Rest/Skip Day) are both
+     * excluded from the "showed up" denominator on the frontend. */
+    public record AttendanceDay(LocalDate date, boolean active, boolean voided, boolean restOrSkip) {
     }
 }

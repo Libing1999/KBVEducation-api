@@ -11,9 +11,11 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.UUID;
 
 /** "Messages from Bhavya" — read-only for the parent's own linked student. PARENT only. */
 @Tag(name = "Parent — Messages", description = "Coach messages for my linked student (PARENT only)")
@@ -25,9 +27,11 @@ public class ParentMessageController {
 
     private final CoachMessageService coachMessageService;
 
-    @Operation(summary = "Get my linked student's coach messages (individual + their cohort's collective), newest first")
+    @Operation(summary = "Get one of my linked students' coach messages (individual + their cohort's collective), newest first")
     @GetMapping
-    public ApiResponse<List<ParentMessageResponse>> myMessages(@AuthenticationPrincipal UserPrincipal principal) {
-        return ApiResponse.success(coachMessageService.listForParent(principal.getId()));
+    public ApiResponse<List<ParentMessageResponse>> myMessages(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam(required = false) UUID studentId) {
+        return ApiResponse.success(coachMessageService.listForParent(principal.getId(), studentId));
     }
 }

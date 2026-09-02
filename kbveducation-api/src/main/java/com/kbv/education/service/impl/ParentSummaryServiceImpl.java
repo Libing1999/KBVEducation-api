@@ -1,6 +1,7 @@
 package com.kbv.education.service.impl;
 
 import com.kbv.education.dto.certificate.CertificateResponse;
+import com.kbv.education.dto.parent.ParentChildResponse;
 import com.kbv.education.dto.parent.ParentSummaryResponse;
 import com.kbv.education.entity.Cohort;
 import com.kbv.education.entity.Homework;
@@ -12,6 +13,7 @@ import com.kbv.education.exception.BusinessRuleException;
 import com.kbv.education.exception.ResourceNotFoundException;
 import com.kbv.education.repository.HomeworkRepository;
 import com.kbv.education.repository.HomeworkSubmissionRepository;
+import com.kbv.education.repository.ParentStudentRepository;
 import com.kbv.education.repository.QuizAttemptRepository;
 import com.kbv.education.repository.QuizRepository;
 import com.kbv.education.repository.ScoreConfigRepository;
@@ -93,11 +95,21 @@ public class ParentSummaryServiceImpl implements ParentSummaryService {
     private final QuizRepository quizRepository;
     private final TierEngineService tierEngineService;
     private final CertificateService certificateService;
+    private final ParentStudentRepository parentStudentRepository;
 
     @Override
     @Transactional(readOnly = true)
-    public ParentSummaryResponse getSummary(UUID parentUserId) {
-        UUID studentId = progressService.resolveStudentId(parentUserId);
+    public List<ParentChildResponse> listMyChildren(UUID parentUserId) {
+        return parentStudentRepository.findAllByParent_IdAndDeletedFalseOrderByCreatedAtAsc(parentUserId).stream()
+                .map(link -> new ParentChildResponse(
+                        link.getStudent().getId(), link.getStudent().getFirstName(), link.getStudent().getLastName()))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ParentSummaryResponse getSummary(UUID parentUserId, UUID requestedStudentId) {
+        UUID studentId = progressService.resolveStudentId(parentUserId, requestedStudentId);
         User student = userRepository.findByIdAndDeletedFalse(studentId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Student", studentId));
         StudentCohort membership = studentCohortRepository
@@ -123,7 +135,7 @@ public class ParentSummaryServiceImpl implements ParentSummaryService {
 
         ParentSummaryResponse.CompletionCount quizzes = quizCompletionCount(studentId, cohort.getId());
         ParentSummaryResponse.CompletionCount homework = homeworkCompletionCount(studentId);
-        ParentSummaryResponse.CertificateInfo certificate = latestCertificate(parentUserId);
+        ParentSummaryResponse.CertificateInfo certificate = latestCertificate(parentUserId, studentId);
 
         String tierLine = (certificate != null || isFinalWeeks(cohort, today))
                 ? tierEngineService.getDisplayTier(studentId)
@@ -271,8 +283,8 @@ public class ParentSummaryServiceImpl implements ParentSummaryService {
 
     // ========================= certificate / tier =========================
 
-    private ParentSummaryResponse.CertificateInfo latestCertificate(UUID parentUserId) {
-        List<CertificateResponse> certificates = certificateService.listForParent(parentUserId);
+    private ParentSummaryResponse.CertificateInfo latestCertificate(UUID parentUserId, UUID studentId) {
+        List<CertificateResponse> certificates = certificateService.listForParent(parentUserId, studentId);
         if (certificates.isEmpty()) {
             return null;
         }

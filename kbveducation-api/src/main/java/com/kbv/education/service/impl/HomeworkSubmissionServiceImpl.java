@@ -8,6 +8,7 @@ import com.kbv.education.entity.Homework;
 import com.kbv.education.entity.HomeworkSubmission;
 import com.kbv.education.entity.HomeworkSubmissionFile;
 import com.kbv.education.entity.Lesson;
+import com.kbv.education.entity.ParentStudent;
 import com.kbv.education.entity.User;
 import com.kbv.education.entity.enums.ActivityType;
 import com.kbv.education.entity.enums.NotificationType;
@@ -139,8 +140,8 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
 
     @Override
     @Transactional(readOnly = true)
-    public HomeworkSubmissionResponse myByLesson(UUID userId, UUID lessonId) {
-        UUID studentId = resolveStudentId(userId);
+    public HomeworkSubmissionResponse myByLesson(UUID userId, UUID requestedStudentId, UUID lessonId) {
+        UUID studentId = resolveStudentId(userId, requestedStudentId);
         Homework homework = homeworkRepository.findByLesson_IdAndDeletedFalse(lessonId)
                 .orElseThrow(() -> new ResourceNotFoundException("No homework configured for this lesson"));
         HomeworkSubmission submission = submissionRepository
@@ -151,8 +152,8 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
 
     @Override
     @Transactional(readOnly = true)
-    public List<HomeworkSubmissionResponse> myAll(UUID userId) {
-        UUID studentId = resolveStudentId(userId);
+    public List<HomeworkSubmissionResponse> myAll(UUID userId, UUID requestedStudentId) {
+        UUID studentId = resolveStudentId(userId, requestedStudentId);
         return submissionRepository.findByStudent_IdAndDeletedFalseOrderBySubmittedAtDesc(studentId).stream()
                 .map(this::toResponse)
                 .toList();
@@ -180,8 +181,8 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
 
     @Override
     @Transactional(readOnly = true)
-    public FileDownloadResult downloadMyFile(UUID userId, UUID fileId) {
-        UUID studentId = resolveStudentId(userId);
+    public FileDownloadResult downloadMyFile(UUID userId, UUID requestedStudentId, UUID fileId) {
+        UUID studentId = resolveStudentId(userId, requestedStudentId);
         HomeworkSubmissionFile file = loadFile(fileId);
         if (!file.getSubmission().getStudent().getId().equals(studentId)) {
             throw ResourceNotFoundException.of("File", fileId);
@@ -236,7 +237,7 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
         }
     }
 
-    private UUID resolveStudentId(UUID userId) {
+    private UUID resolveStudentId(UUID userId, UUID requestedStudentId) {
         User user = userRepository.findByIdAndDeletedFalse(userId)
                 .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
         RoleType role = user.getRole().getName();
@@ -244,9 +245,19 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
             return user.getId();
         }
         if (role == RoleType.PARENT) {
-            return parentStudentRepository.findByParent_IdAndDeletedFalse(userId)
+            List<ParentStudent> links =
+                    parentStudentRepository.findAllByParent_IdAndDeletedFalseOrderByCreatedAtAsc(userId);
+            if (links.isEmpty()) {
+                throw new BusinessRuleException("No student is linked to this parent account");
+            }
+            if (requestedStudentId == null) {
+                return links.get(0).getStudent().getId();
+            }
+            return links.stream()
                     .map(link -> link.getStudent().getId())
-                    .orElseThrow(() -> new BusinessRuleException("No student is linked to this parent account"));
+                    .filter(id -> id.equals(requestedStudentId))
+                    .findFirst()
+                    .orElseThrow(() -> new BusinessRuleException("This student is not linked to your account"));
         }
         throw new BusinessRuleException("Homework is available to students and parents only");
     }

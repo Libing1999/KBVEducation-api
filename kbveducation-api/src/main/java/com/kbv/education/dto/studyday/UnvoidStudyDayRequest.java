@@ -1,14 +1,12 @@
 package com.kbv.education.dto.studyday;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDate;
 import java.util.UUID;
 
-public record VoidStudyDayRequest(
+public record UnvoidStudyDayRequest(
         @NotNull UUID studentId,
-        @NotNull LocalDate date,
-        @NotBlank String reason
+        @NotNull LocalDate date
 ) {
 }

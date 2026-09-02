@@ -36,23 +36,27 @@ public class StudentLessonController {
     @GetMapping
     public ApiResponse<PageResponse<StudentLessonResponse>> myLessons(
             @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam(required = false) UUID studentId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.success(studentLessonService.myLessons(principal.getId(), page, size));
+        return ApiResponse.success(studentLessonService.myLessons(principal.getId(), studentId, page, size));
     }
 
     @Operation(summary = "Get a lesson's detail")
     @GetMapping("/{id}")
     public ApiResponse<StudentLessonDetailResponse> detail(
             @AuthenticationPrincipal UserPrincipal principal,
-            @PathVariable UUID id) {
-        return ApiResponse.success(studentLessonService.getLessonDetail(principal.getId(), id));
+            @PathVariable UUID id,
+            @RequestParam(required = false) UUID studentId) {
+        return ApiResponse.success(studentLessonService.getLessonDetail(principal.getId(), studentId, id));
     }
 
     @Operation(summary = "Get today's lesson, if any — null when there is no lesson scheduled today")
     @GetMapping("/today")
-    public ApiResponse<StudentLessonDetailResponse> today(@AuthenticationPrincipal UserPrincipal principal) {
-        return ApiResponse.success(studentLessonService.getTodayLesson(principal.getId()).orElse(null));
+    public ApiResponse<StudentLessonDetailResponse> today(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam(required = false) UUID studentId) {
+        return ApiResponse.success(studentLessonService.getTodayLesson(principal.getId(), studentId).orElse(null));
     }
 
     @Operation(summary = "Download a lesson file")
@@ -60,8 +64,9 @@ public class StudentLessonController {
     public ResponseEntity<Resource> download(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable UUID lessonId,
-            @PathVariable UUID fileId) {
+            @PathVariable UUID fileId,
+            @RequestParam(required = false) UUID studentId) {
         return FileDownloads.attachment(
-                studentLessonService.downloadLessonFile(principal.getId(), lessonId, fileId));
+                studentLessonService.downloadLessonFile(principal.getId(), studentId, lessonId, fileId));
     }
 }
