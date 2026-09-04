@@ -28,9 +28,13 @@ import com.kbv.education.service.TierEngineService;
 import com.kbv.education.utils.PageableBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -65,9 +69,43 @@ public class ScoreEngineServiceImpl implements ScoreEngineService {
     private final TierEngineService tierEngineService;
     private final LeaderboardService leaderboardService;
 
+    /** Self-reference (proxied, hence field injection + {@code @Lazy} rather than a Lombok
+     * constructor param — constructor injection here still deadlocks on the circular
+     * dependency even with {@code @Lazy}, since Lombok's constructor requires this bean fully
+     * resolved to construct itself) so {@link #recalculate} can retry through a fresh
+     * transactional method call rather than a same-class invocation, which Spring's
+     * proxy-based {@code @Transactional} can't intercept. */
+    @Lazy
+    @Autowired
+    private ScoreEngineServiceImpl self;
+
     @Override
-    @Transactional
     public StudentScoreResponse recalculate(UUID studentId, ScoreTriggerReason reason) {
+        try {
+            return self.recalculateInTransaction(studentId, reason);
+        } catch (DataIntegrityViolationException e) {
+            // A concurrent recalculation for the same student already committed the current
+            // row first (guarded by the uq_student_scores_current partial unique index) — most
+            // commonly hit on a brand-new student's first page load, which fires several
+            // endpoints in parallel that each try to compute that student's very first score.
+            // Rather than surface a 500 to whichever request lost this benign race, hand back
+            // the winner's row: it reflects the exact same inputs, since nothing else could
+            // have changed between the two near-simultaneous attempts.
+            log.info("Recalculation race for student {} — returning the concurrently-saved current score", studentId);
+            return studentScoreRepository.findByStudent_IdAndCurrentTrueAndDeletedFalse(studentId)
+                    .map(this::toResponse)
+                    .orElseThrow(() -> e);
+        }
+    }
+
+    /** The actual computation, in its own transactional boundary so {@link #recalculate} can
+     * catch a constraint violation from it without that violation poisoning a shared transaction.
+     * {@code REQUIRES_NEW}, not the default REQUIRED: a caller like {@link #getCurrent} is often
+     * itself already transactional, and joining that ambient transaction would mark it
+     * rollback-only the moment this method's flush throws — even though the exception is caught
+     * right here — causing an UnexpectedRollbackException when the caller's transaction commits. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public StudentScoreResponse recalculateInTransaction(UUID studentId, ScoreTriggerReason reason) {
         User student = userRepository.findByIdAndDeletedFalse(studentId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Student", studentId));
         ScoreConfig config = activeConfig();
@@ -97,7 +135,9 @@ public class ScoreEngineServiceImpl implements ScoreEngineService {
         score.setQuizWeight(config.getQuizWeight());
         score.setTriggerReason(reason);
         score.setCurrent(true);
-        StudentScore saved = studentScoreRepository.save(score);
+        // flush (not just save) so a concurrent-insert constraint violation surfaces here,
+        // inside this method's own transaction, instead of later at commit time in the caller's.
+        StudentScore saved = studentScoreRepository.saveAndFlush(score);
 
         tierEngineService.recalculateCalculatedTier(studentId);
 

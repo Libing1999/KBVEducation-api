@@ -10,6 +10,7 @@ import com.kbv.education.entity.TierRule;
 import com.kbv.education.entity.User;
 import com.kbv.education.entity.enums.PracticeStatus;
 import com.kbv.education.entity.enums.ScoreAuditEntityType;
+import com.kbv.education.entity.enums.ScoreTriggerReason;
 import com.kbv.education.entity.enums.StudyType;
 import com.kbv.education.entity.enums.TierEventSource;
 import com.kbv.education.exception.BadRequestException;
@@ -20,11 +21,14 @@ import com.kbv.education.repository.TierHistoryRepository;
 import com.kbv.education.repository.TierRuleRepository;
 import com.kbv.education.repository.UserRepository;
 import com.kbv.education.service.ScoreAuditLogService;
+import com.kbv.education.service.ScoreEngineService;
 import com.kbv.education.service.TierEngineService;
 import com.kbv.education.utils.InputSanitizer;
 import com.kbv.education.utils.PageableBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -58,6 +62,13 @@ public class TierEngineServiceImpl implements TierEngineService {
     private final TierHistoryRepository tierHistoryRepository;
     private final PracticeSessionRepository practiceSessionRepository;
     private final ScoreAuditLogService scoreAuditLogService;
+
+    /** {@code @Lazy} field injection (not a Lombok constructor param) to break the circular
+     * dependency: {@link ScoreEngineServiceImpl} already depends on {@link TierEngineService}
+     * to compute a student's tier right after computing their score. */
+    @Lazy
+    @Autowired
+    private ScoreEngineService scoreEngineService;
 
     @Override
     @Transactional
@@ -232,9 +243,19 @@ public class TierEngineServiceImpl implements TierEngineService {
         return copy;
     }
 
+    /** Reads the student's current score, computing it first (same as {@link ScoreEngineService#getCurrent})
+     * if this is the first time anything has ever needed it — e.g. a brand-new student's first page
+     * load hitting the tier endpoint before anything else has triggered a score calculation. Previously
+     * this threw when no score existed yet instead of computing one, a 404 a real student could hit on
+     * their very first visit. */
     private StudentScore currentScore(UUID studentId) {
         return studentScoreRepository.findByStudent_IdAndCurrentTrueAndDeletedFalse(studentId)
-                .orElseThrow(() -> new ResourceNotFoundException("No score has been calculated for this student yet"));
+                .orElseGet(() -> {
+                    scoreEngineService.recalculate(studentId, ScoreTriggerReason.MANUAL_RECALC);
+                    return studentScoreRepository.findByStudent_IdAndCurrentTrueAndDeletedFalse(studentId)
+                            .orElseThrow(() -> new ResourceNotFoundException(
+                                    "No score has been calculated for this student yet"));
+                });
     }
 
     private TierHistoryResponse toResponse(TierHistory history) {
