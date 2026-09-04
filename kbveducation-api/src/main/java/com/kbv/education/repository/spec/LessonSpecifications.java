@@ -4,6 +4,7 @@ import com.kbv.education.entity.Lesson;
 import com.kbv.education.entity.enums.LessonStatus;
 import org.springframework.data.jpa.domain.Specification;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 public final class LessonSpecifications {
@@ -27,6 +28,13 @@ public final class LessonSpecifications {
             return null;
         }
         return (root, query, cb) -> cb.equal(root.get("status"), status);
+    }
+
+    public static Specification<Lesson> onDate(LocalDate date) {
+        if (date == null) {
+            return null;
+        }
+        return (root, query, cb) -> cb.equal(root.get("lessonDate"), date);
     }
 
     public static Specification<Lesson> search(String term) {

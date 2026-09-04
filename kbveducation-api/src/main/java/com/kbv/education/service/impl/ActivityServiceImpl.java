@@ -136,7 +136,9 @@ public class ActivityServiceImpl implements ActivityService {
                         d.isHasReflection(),
                         d.isHasPractice(),
                         d.isHasHomework(),
-                        d.isHasQuiz()))
+                        d.isHasQuiz(),
+                        d.isVoided(),
+                        d.getVoidedReason()))
                 .toList();
     }
 

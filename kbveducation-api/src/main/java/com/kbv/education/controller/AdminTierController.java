@@ -2,6 +2,7 @@ package com.kbv.education.controller;
 
 import com.kbv.education.dto.response.ApiResponse;
 import com.kbv.education.dto.response.PageResponse;
+import com.kbv.education.dto.tier.CurrentTierResponse;
 import com.kbv.education.dto.tier.OverrideTierRequest;
 import com.kbv.education.dto.tier.TierHistoryResponse;
 import com.kbv.education.security.UserPrincipal;
@@ -30,6 +31,12 @@ import java.util.UUID;
 public class AdminTierController {
 
     private final TierEngineService tierEngineService;
+
+    @Operation(summary = "Get a student's current tier: calculated, confirmed, next tier, and what's left to reach it")
+    @GetMapping("/{studentId}")
+    public ApiResponse<CurrentTierResponse> current(@PathVariable UUID studentId) {
+        return ApiResponse.success(tierEngineService.getCurrentTier(studentId));
+    }
 
     @Operation(summary = "Confirm a student's calculated tier as-is")
     @PutMapping("/{studentId}/confirm")

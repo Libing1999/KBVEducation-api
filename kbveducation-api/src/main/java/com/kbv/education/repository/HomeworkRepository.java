@@ -21,6 +21,13 @@ public interface HomeworkRepository extends JpaRepository<Homework, UUID> {
 
     List<Homework> findByDueDateBetweenAndDeletedFalse(Instant from, Instant to);
 
+    // --- Parent summary: action-strip "next thing due" — nearest upcoming due date across a
+    // cohort's lessons. Filtered down to "not yet submitted by this student" in the service, since
+    // that check needs HomeworkSubmissionRepository. ---
+    @Query("select h from Homework h where h.deleted = false and h.lesson.cohort.id = :cohortId "
+            + "and h.dueDate is not null and h.dueDate >= :from order by h.dueDate asc")
+    List<Homework> findUpcomingByCohortId(@Param("cohortId") UUID cohortId, @Param("from") Instant from);
+
     @Query("select h from Homework h where h.deleted = false and lower(h.title) like lower(concat('%', :q, '%'))")
     List<Homework> search(@Param("q") String query, Pageable pageable);
 }

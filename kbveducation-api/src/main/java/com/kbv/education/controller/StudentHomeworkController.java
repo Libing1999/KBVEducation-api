@@ -54,22 +54,25 @@ public class StudentHomeworkController {
     @GetMapping("/{lessonId}")
     public ApiResponse<HomeworkSubmissionResponse> myByLesson(
             @AuthenticationPrincipal UserPrincipal principal,
-            @PathVariable UUID lessonId) {
-        return ApiResponse.success(submissionService.myByLesson(principal.getId(), lessonId));
+            @PathVariable UUID lessonId,
+            @RequestParam(required = false) UUID studentId) {
+        return ApiResponse.success(submissionService.myByLesson(principal.getId(), studentId, lessonId));
     }
 
     @Operation(summary = "List all my submissions")
     @GetMapping
     public ApiResponse<List<HomeworkSubmissionResponse>> myAll(
-            @AuthenticationPrincipal UserPrincipal principal) {
-        return ApiResponse.success(submissionService.myAll(principal.getId()));
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam(required = false) UUID studentId) {
+        return ApiResponse.success(submissionService.myAll(principal.getId(), studentId));
     }
 
     @Operation(summary = "Download one of my submission files")
     @GetMapping("/files/{fileId}/download")
     public ResponseEntity<Resource> download(
             @AuthenticationPrincipal UserPrincipal principal,
-            @PathVariable UUID fileId) {
-        return FileDownloads.attachment(submissionService.downloadMyFile(principal.getId(), fileId));
+            @PathVariable UUID fileId,
+            @RequestParam(required = false) UUID studentId) {
+        return FileDownloads.attachment(submissionService.downloadMyFile(principal.getId(), studentId, fileId));
     }
 }

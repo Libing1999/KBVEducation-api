@@ -4,6 +4,7 @@ import com.kbv.education.dto.certificate.CertificateTemplateResponse;
 import com.kbv.education.dto.certificate.UpsertCertificateTemplateRequest;
 import com.kbv.education.dto.file.FileDownloadResult;
 import com.kbv.education.entity.CertificateTemplate;
+import com.kbv.education.entity.enums.CertificateType;
 import com.kbv.education.exception.ResourceNotFoundException;
 import com.kbv.education.mapper.CertificateTemplateMapper;
 import com.kbv.education.repository.CertificateTemplateRepository;
@@ -79,21 +80,37 @@ public class CertificateTemplateServiceImpl implements CertificateTemplateServic
     @Transactional(readOnly = true)
     public FileDownloadResult preview(UUID id) {
         CertificateTemplate template = getTemplate(id);
+        CertificateType type = template.getCertificateType();
+        String issueDate = LocalDate.now().format(DATE_FORMAT);
 
-        Map<String, String> sample = Map.of(
-                "studentName", "Jordan Sample",
-                "tierName", "Tier 1",
-                "cohortName", "Sample Cohort",
-                "issueDate", LocalDate.now().format(DATE_FORMAT),
-                "certificateNumber", "PREVIEW");
+        byte[] pdf;
+        if (type == CertificateType.TIER_1 || type == CertificateType.TIER_2 || type == CertificateType.TIER_3) {
+            // Fixed KBV tier design - bodyTemplate/branding overrides don't apply, see
+            // CertificatePdfRenderer's class Javadoc. Sample composite score is a representative
+            // number for the tier's band, not a real student's.
+            String sampleComposite = switch (type) {
+                case TIER_1 -> "93%";
+                case TIER_2 -> "85%";
+                default -> "70%";
+            };
+            pdf = certificatePdfRenderer.renderTierCertificate(type, "Jordan Sample", sampleComposite,
+                    issueDate, "Sample Cohort — " + LocalDate.now().getYear());
+        } else {
+            Map<String, String> sample = Map.of(
+                    "studentName", "Jordan Sample",
+                    "tierName", "Tier 1",
+                    "cohortName", "Sample Cohort",
+                    "issueDate", issueDate,
+                    "certificateNumber", "PREVIEW");
 
-        String institutionName = template.getInstitutionNameOverride() != null
-                ? template.getInstitutionNameOverride() : DEFAULT_INSTITUTION_NAME;
+            String institutionName = template.getInstitutionNameOverride() != null
+                    ? template.getInstitutionNameOverride() : DEFAULT_INSTITUTION_NAME;
 
-        byte[] pdf = certificatePdfRenderer.render(
-                template.getBodyTemplate(), sample, CertificateTitles.of(template.getCertificateType()),
-                institutionName, template.getLogoPathOverride(), template.getPrimaryColorHex(),
-                sample.get("studentName"), sample.get("certificateNumber"), sample.get("issueDate"));
+            pdf = certificatePdfRenderer.render(
+                    template.getBodyTemplate(), sample, CertificateTitles.of(type),
+                    institutionName, template.getLogoPathOverride(), template.getPrimaryColorHex(),
+                    sample.get("studentName"), sample.get("certificateNumber"), sample.get("issueDate"));
+        }
 
         return new FileDownloadResult("certificate-preview.pdf", "application/pdf", pdf.length,
                 new ByteArrayResource(pdf));

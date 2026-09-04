@@ -15,6 +15,7 @@ import com.kbv.education.repository.PracticeSessionRepository;
 import com.kbv.education.repository.QuizAttemptRepository;
 import com.kbv.education.repository.ReflectionEntryRepository;
 import com.kbv.education.repository.UserRepository;
+import com.kbv.education.entity.ParentStudent;
 import com.kbv.education.service.ProgressService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -40,8 +42,8 @@ public class ProgressServiceImpl implements ProgressService {
 
     @Override
     @Transactional(readOnly = true)
-    public StudentProgressResponse getProgress(UUID userId) {
-        return getProgressForStudent(resolveStudentId(userId));
+    public StudentProgressResponse getProgress(UUID userId, UUID requestedStudentId) {
+        return getProgressForStudent(resolveStudentId(userId, requestedStudentId));
     }
 
     @Override
@@ -104,7 +106,7 @@ public class ProgressServiceImpl implements ProgressService {
 
     @Override
     @Transactional(readOnly = true)
-    public UUID resolveStudentId(UUID userId) {
+    public UUID resolveStudentId(UUID userId, UUID requestedStudentId) {
         User user = userRepository.findByIdAndDeletedFalse(userId)
                 .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
         RoleType role = user.getRole().getName();
@@ -112,9 +114,18 @@ public class ProgressServiceImpl implements ProgressService {
             return user.getId();
         }
         if (role == RoleType.PARENT) {
-            return parentStudentRepository.findByParent_IdAndDeletedFalse(userId)
+            List<ParentStudent> links = parentStudentRepository.findAllByParent_IdAndDeletedFalseOrderByCreatedAtAsc(userId);
+            if (links.isEmpty()) {
+                throw new BusinessRuleException("No student is linked to this parent account");
+            }
+            if (requestedStudentId == null) {
+                return links.get(0).getStudent().getId();
+            }
+            return links.stream()
                     .map(link -> link.getStudent().getId())
-                    .orElseThrow(() -> new BusinessRuleException("No student is linked to this parent account"));
+                    .filter(id -> id.equals(requestedStudentId))
+                    .findFirst()
+                    .orElseThrow(() -> new BusinessRuleException("This student is not linked to your account"));
         }
         throw new BusinessRuleException("Progress is available to students and parents only");
     }

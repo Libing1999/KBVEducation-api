@@ -1,6 +1,7 @@
 package com.kbv.education.service.impl;
 
 import com.kbv.education.dto.leaderboard.LeaderboardEntryResponse;
+import com.kbv.education.dto.leaderboard.LeaderboardStandingResponse;
 import com.kbv.education.dto.response.PageResponse;
 import com.kbv.education.entity.Cohort;
 import com.kbv.education.entity.LeaderboardSnapshot;
@@ -30,6 +31,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -123,8 +125,8 @@ public class LeaderboardServiceImpl implements LeaderboardService {
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public List<LeaderboardEntryResponse> studentView(UUID studentId, LeaderboardSortField sortBy) {
+    @Transactional
+    public LeaderboardStandingResponse studentView(UUID studentId, LeaderboardSortField sortBy) {
         ScoreConfig config = activeConfig();
         if (!config.isLeaderboardEnabled()) {
             throw new BusinessRuleException("The leaderboard is currently disabled");
@@ -133,10 +135,39 @@ public class LeaderboardServiceImpl implements LeaderboardService {
                 .map(sc -> sc.getCohort().getId())
                 .orElseThrow(() -> new BusinessRuleException("You are not assigned to a cohort"));
         LeaderboardSortField effectiveSort = sortBy != null ? sortBy : config.getLeaderboardSortBy();
-        return leaderboardSnapshotRepository
-                .findByCohort_IdAndSortByAndDeletedFalseOrderByRankAsc(cohortId, effectiveSort).stream()
-                .map(this::toResponse)
-                .toList();
+
+        List<LeaderboardSnapshot> ranked = leaderboardSnapshotRepository
+                .findByCohort_IdAndSortByAndDeletedFalseOrderByRankAsc(cohortId, effectiveSort);
+        Optional<LeaderboardSnapshot> ownSnapshot = findOwn(ranked, studentId);
+
+        // Self-heal instead of dead-ending: the snapshot is a cache, only rebuilt on specific
+        // triggers (a submission, a config change, an explicit admin regenerate) — a student who
+        // was just assigned to this cohort, or whose score was first calculated after the last
+        // rebuild, has a real score but no row here yet. A student must always be able to see
+        // their own position, so regenerate once and retry before concluding there's truly
+        // nothing to show, rather than leaving them stuck behind a caching gap only an admin
+        // action could otherwise clear.
+        if (ownSnapshot.isEmpty()) {
+            regenerate(cohortId);
+            ranked = leaderboardSnapshotRepository
+                    .findByCohort_IdAndSortByAndDeletedFalseOrderByRankAsc(cohortId, effectiveSort);
+            ownSnapshot = findOwn(ranked, studentId);
+        }
+
+        // Privacy boundary lives here, not in the controller or the frontend: the
+        // response can never contain more than the public top-N plus the caller's
+        // own row, regardless of what a client asks for.
+        int topN = Math.max(1, config.getPublicTopN());
+        List<LeaderboardEntryResponse> topEntries = ranked.stream().limit(topN).map(this::toResponse).toList();
+
+        LeaderboardSnapshot own = ownSnapshot.orElseThrow(() -> new BusinessRuleException(
+                "Your score hasn't been calculated yet — check back once your first activity is recorded"));
+
+        return new LeaderboardStandingResponse(topEntries, toResponse(own), ranked.size(), topN);
+    }
+
+    private Optional<LeaderboardSnapshot> findOwn(List<LeaderboardSnapshot> ranked, UUID studentId) {
+        return ranked.stream().filter(s -> s.getStudent().getId().equals(studentId)).findFirst();
     }
 
     private BigDecimal valueFor(StudentScore score, LeaderboardSortField sortBy) {

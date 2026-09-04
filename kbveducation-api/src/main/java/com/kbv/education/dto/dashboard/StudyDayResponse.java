@@ -8,6 +8,8 @@ public record StudyDayResponse(
         boolean hasReflection,
         boolean hasPractice,
         boolean hasHomework,
-        boolean hasQuiz
+        boolean hasQuiz,
+        boolean voided,
+        String voidedReason
 ) {
 }

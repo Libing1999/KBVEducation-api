@@ -7,6 +7,7 @@ import com.kbv.education.dto.response.PageResponse;
 import com.kbv.education.entity.Homework;
 import com.kbv.education.entity.Lesson;
 import com.kbv.education.entity.LessonFile;
+import com.kbv.education.entity.ParentStudent;
 import com.kbv.education.entity.Quiz;
 import com.kbv.education.entity.User;
 import com.kbv.education.entity.enums.LessonStatus;
@@ -59,8 +60,8 @@ public class StudentLessonServiceImpl implements StudentLessonService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<StudentLessonResponse> myLessons(UUID userId, int page, int size) {
-        UUID studentId = resolveStudentId(userId);
+    public PageResponse<StudentLessonResponse> myLessons(UUID userId, UUID requestedStudentId, int page, int size) {
+        UUID studentId = resolveStudentId(userId, requestedStudentId);
         UUID cohortId = activeCohortId(studentId).orElse(null);
 
         int safeSize = size <= 0 ? 20 : Math.min(size, 100);
@@ -81,23 +82,45 @@ public class StudentLessonServiceImpl implements StudentLessonService {
 
     @Override
     @Transactional(readOnly = true)
-    public StudentLessonDetailResponse getLessonDetail(UUID userId, UUID lessonId) {
-        UUID studentId = resolveStudentId(userId);
+    public StudentLessonDetailResponse getLessonDetail(UUID userId, UUID requestedStudentId, UUID lessonId) {
+        UUID studentId = resolveStudentId(userId, requestedStudentId);
         Lesson lesson = accessibleLesson(studentId, lessonId);
+        return toDetail(lesson, studentId);
+    }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<StudentLessonDetailResponse> getTodayLesson(UUID userId, UUID requestedStudentId) {
+        UUID studentId = resolveStudentId(userId, requestedStudentId);
+        UUID cohortId = activeCohortId(studentId).orElse(null);
+        if (cohortId == null) {
+            return Optional.empty();
+        }
+
+        Specification<Lesson> spec = Specification.where(LessonSpecifications.notDeleted())
+                .and(LessonSpecifications.inCohort(cohortId))
+                .and(LessonSpecifications.hasStatus(LessonStatus.PUBLISHED))
+                .and(LessonSpecifications.onDate(java.time.LocalDate.now()));
+
+        return lessonRepository.findAll(spec).stream()
+                .findFirst()
+                .map(lesson -> toDetail(lesson, studentId));
+    }
+
+    private StudentLessonDetailResponse toDetail(Lesson lesson, UUID studentId) {
         List<com.kbv.education.dto.file.FileResponse> files =
-                lessonFileRepository.findByLesson_IdAndDeletedFalseOrderByUploadedDateAsc(lessonId).stream()
+                lessonFileRepository.findByLesson_IdAndDeletedFalseOrderByUploadedDateAsc(lesson.getId()).stream()
                         .map(fileMapper::toResponse)
                         .toList();
 
-        Optional<Quiz> quiz = quizRepository.findByLesson_IdAndDeletedFalse(lessonId)
+        Optional<Quiz> quiz = quizRepository.findByLesson_IdAndDeletedFalse(lesson.getId())
                 .filter(Quiz::isPublished);
         boolean hasQuiz = quiz.isPresent();
         boolean quizCompleted = quiz
                 .map(q -> quizAttemptRepository.existsByQuiz_IdAndStudent_IdAndDeletedFalse(q.getId(), studentId))
                 .orElse(false);
 
-        Optional<Homework> homework = homeworkRepository.findByLesson_IdAndDeletedFalse(lessonId);
+        Optional<Homework> homework = homeworkRepository.findByLesson_IdAndDeletedFalse(lesson.getId());
         boolean hasHomework = homework.isPresent();
         boolean homeworkSubmitted = homework
                 .map(h -> homeworkSubmissionRepository
@@ -128,8 +151,8 @@ public class StudentLessonServiceImpl implements StudentLessonService {
 
     @Override
     @Transactional(readOnly = true)
-    public FileDownloadResult downloadLessonFile(UUID userId, UUID lessonId, UUID fileId) {
-        UUID studentId = resolveStudentId(userId);
+    public FileDownloadResult downloadLessonFile(UUID userId, UUID requestedStudentId, UUID lessonId, UUID fileId) {
+        UUID studentId = resolveStudentId(userId, requestedStudentId);
         accessibleLesson(studentId, lessonId);
 
         LessonFile file = lessonFileRepository.findByIdAndDeletedFalse(fileId)
@@ -182,7 +205,7 @@ public class StudentLessonServiceImpl implements StudentLessonService {
         return lesson;
     }
 
-    private UUID resolveStudentId(UUID userId) {
+    private UUID resolveStudentId(UUID userId, UUID requestedStudentId) {
         User user = userRepository.findByIdAndDeletedFalse(userId)
                 .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
         RoleType role = user.getRole().getName();
@@ -190,9 +213,19 @@ public class StudentLessonServiceImpl implements StudentLessonService {
             return user.getId();
         }
         if (role == RoleType.PARENT) {
-            return parentStudentRepository.findByParent_IdAndDeletedFalse(userId)
+            List<ParentStudent> links =
+                    parentStudentRepository.findAllByParent_IdAndDeletedFalseOrderByCreatedAtAsc(userId);
+            if (links.isEmpty()) {
+                throw new BusinessRuleException("No student is linked to this parent account");
+            }
+            if (requestedStudentId == null) {
+                return links.get(0).getStudent().getId();
+            }
+            return links.stream()
                     .map(link -> link.getStudent().getId())
-                    .orElseThrow(() -> new BusinessRuleException("No student is linked to this parent account"));
+                    .filter(id -> id.equals(requestedStudentId))
+                    .findFirst()
+                    .orElseThrow(() -> new BusinessRuleException("This student is not linked to your account"));
         }
         throw new BusinessRuleException("Lessons are available to students and parents only");
     }

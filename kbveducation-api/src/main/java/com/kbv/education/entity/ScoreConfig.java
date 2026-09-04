@@ -62,6 +62,14 @@ public class ScoreConfig extends BaseEntity {
     @Column(name = "dashboard_widgets_enabled", nullable = false)
     private boolean dashboardWidgetsEnabled = true;
 
+    /**
+     * How many top-ranked students are ever shown publicly on the student
+     * leaderboard (the "Top N" panel). Admin-configurable — never hardcode a
+     * top-N count in application code; always read this. Defaults to 3.
+     */
+    @Column(name = "public_top_n", nullable = false)
+    private int publicTopN = 3;
+
     @Column(name = "active", nullable = false)
     private boolean active = true;
 }
