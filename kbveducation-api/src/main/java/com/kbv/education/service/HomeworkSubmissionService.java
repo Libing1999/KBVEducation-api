@@ -13,10 +13,14 @@ public interface HomeworkSubmissionService {
 
     HomeworkSubmissionResponse submit(UUID userId, UUID lessonId, String note, MultipartFile[] files);
 
-    /** The caller's submission for a lesson, or throws if not submitted yet. */
-    HomeworkSubmissionResponse myByLesson(UUID userId, UUID lessonId);
+    /**
+     * The effective student's submission for a lesson, or throws if not submitted yet.
+     * {@code requestedStudentId} selects which child for a multi-child parent caller;
+     * ignored for a student, and defaults to the parent's first-linked child when null.
+     */
+    HomeworkSubmissionResponse myByLesson(UUID userId, UUID requestedStudentId, UUID lessonId);
 
-    List<HomeworkSubmissionResponse> myAll(UUID userId);
+    List<HomeworkSubmissionResponse> myAll(UUID userId, UUID requestedStudentId);
 
     PageResponse<HomeworkSubmissionResponse> adminList(UUID lessonId, UUID studentId, String search,
                                                        int page, int size, String sort, String direction);
@@ -25,5 +29,5 @@ public interface HomeworkSubmissionService {
     FileDownloadResult downloadFile(UUID fileId);
 
     /** Student/parent download of a file belonging to the effective student. */
-    FileDownloadResult downloadMyFile(UUID userId, UUID fileId);
+    FileDownloadResult downloadMyFile(UUID userId, UUID requestedStudentId, UUID fileId);
 }

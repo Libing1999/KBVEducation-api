@@ -20,9 +20,11 @@ public interface ParentService {
 
     ParentResponse update(UUID id, UpdateUserRequest request);
 
+    /** Links a parent to an additional student; a no-op if already linked to that student. */
     ParentResponse linkStudent(UUID parentId, LinkStudentRequest request);
 
-    void unlinkStudent(UUID parentId);
+    /** Unlinks one specific student from this parent (a parent may have several). */
+    void unlinkStudent(UUID parentId, UUID studentId);
 
     void softDelete(UUID id);
 }

@@ -1,5 +1,6 @@
 package com.kbv.education.service.impl;
 
+import com.kbv.education.audit.Audited;
 import com.kbv.education.entity.StudyDay;
 import com.kbv.education.entity.User;
 import com.kbv.education.entity.enums.ScoreAuditEntityType;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Slf4j
@@ -33,15 +35,23 @@ public class StudyDayAdminServiceImpl implements StudyDayAdminService {
 
     @Override
     @Transactional
-    public void voidDay(UUID studyDayId, String reason, UUID adminId) {
-        StudyDay day = studyDayRepository.findByIdAndDeletedFalse(studyDayId)
-                .orElseThrow(() -> ResourceNotFoundException.of("Study day", studyDayId));
-        if (day.isVoided()) {
-            throw new BusinessRuleException("This study day is already voided");
-        }
-
+    @Audited(action = "STUDY_DAY_VOIDED", entityType = "STUDY_DAY")
+    public void voidDay(UUID studentId, LocalDate date, String reason, UUID adminId) {
+        User student = userRepository.findByIdAndDeletedFalse(studentId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Student", studentId));
         User admin = userRepository.findByIdAndDeletedFalse(adminId)
                 .orElseThrow(() -> ResourceNotFoundException.of("User", adminId));
+
+        StudyDay day = studyDayRepository.findByStudent_IdAndStudyDateAndDeletedFalse(studentId, date)
+                .orElseGet(() -> {
+                    StudyDay d = new StudyDay();
+                    d.setStudent(student);
+                    d.setStudyDate(date);
+                    return d;
+                });
+        if (day.isVoided()) {
+            throw new BusinessRuleException("This day is already voided");
+        }
 
         day.setVoided(true);
         day.setVoidedReason(reason);
@@ -52,15 +62,43 @@ public class StudyDayAdminServiceImpl implements StudyDayAdminService {
         ScoreAuditEntityType entityType = day.isHasPractice()
                 ? ScoreAuditEntityType.PRACTICE
                 : ScoreAuditEntityType.REFLECTION;
-        scoreAuditLogService.record(entityType, day.getId(), day.getStudent().getId(),
-                "STUDY_DAY_VOIDED", null, "voided", reason);
+        scoreAuditLogService.record(entityType, day.getId(), studentId, "STUDY_DAY_VOIDED", null, "voided", reason);
 
+        recalculate(studentId, day);
+        log.info("Voided day {} for student {} by admin {}", date, studentId, adminId);
+    }
+
+    @Override
+    @Transactional
+    @Audited(action = "STUDY_DAY_UNVOIDED", entityType = "STUDY_DAY")
+    public void unvoidDay(UUID studentId, LocalDate date, UUID adminId) {
+        StudyDay day = studyDayRepository.findByStudent_IdAndStudyDateAndDeletedFalse(studentId, date)
+                .orElseThrow(() -> new BusinessRuleException("This day was never voided"));
+        if (!day.isVoided()) {
+            throw new BusinessRuleException("This day is not voided");
+        }
+
+        day.setVoided(false);
+        String reason = day.getVoidedReason();
+        day.setVoidedReason(null);
+        day.setVoidedBy(null);
+        day.setVoidedAt(null);
+        studyDayRepository.save(day);
+
+        ScoreAuditEntityType entityType = day.isHasPractice()
+                ? ScoreAuditEntityType.PRACTICE
+                : ScoreAuditEntityType.REFLECTION;
+        scoreAuditLogService.record(entityType, day.getId(), studentId, "STUDY_DAY_UNVOIDED", "voided", null, reason);
+
+        recalculate(studentId, day);
+        log.info("Unvoided day {} for student {} by admin {}", date, studentId, adminId);
+    }
+
+    private void recalculate(UUID studentId, StudyDay day) {
         ScoreTriggerReason scoreTrigger = day.isHasPractice()
                 ? ScoreTriggerReason.PRACTICE_CHANGE
                 : ScoreTriggerReason.REFLECTION_CHANGE;
-        scoreEngineService.recalculate(day.getStudent().getId(), scoreTrigger);
-        leaderboardService.regenerateForStudent(day.getStudent().getId());
-
-        log.info("Voided study day {} by admin {}", studyDayId, adminId);
+        scoreEngineService.recalculate(studentId, scoreTrigger);
+        leaderboardService.regenerateForStudent(studentId);
     }
 }

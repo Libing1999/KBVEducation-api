@@ -9,5 +9,6 @@ public enum ScoreTriggerReason {
     HOMEWORK_CHANGE,
     QUIZ_CHANGE,
     CONFIG_CHANGE,
+    COHORT_DAY_CHANGE,
     MANUAL_RECALC
 }

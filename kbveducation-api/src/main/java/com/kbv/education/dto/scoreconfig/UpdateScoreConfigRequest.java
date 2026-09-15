@@ -3,6 +3,7 @@ package com.kbv.education.dto.scoreconfig;
 import com.kbv.education.entity.enums.LeaderboardSortField;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 
@@ -21,6 +22,7 @@ public record UpdateScoreConfigRequest(
         @NotNull @Min(0) Integer totalHomeworkCount,
         @NotNull Boolean leaderboardEnabled,
         @NotNull LeaderboardSortField leaderboardSortBy,
-        @NotNull Boolean dashboardWidgetsEnabled
+        @NotNull Boolean dashboardWidgetsEnabled,
+        @NotNull @Min(1) @Max(50) Integer publicTopN
 ) {
 }

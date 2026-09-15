@@ -63,6 +63,7 @@ public class ScoreConfigServiceImpl implements ScoreConfigService {
         config.setLeaderboardEnabled(request.leaderboardEnabled());
         config.setLeaderboardSortBy(request.leaderboardSortBy());
         config.setDashboardWidgetsEnabled(request.dashboardWidgetsEnabled());
+        config.setPublicTopN(request.publicTopN());
 
         ScoreConfig saved = scoreConfigRepository.save(config);
         ScoreConfigResponse response = scoreConfigMapper.toResponse(saved);

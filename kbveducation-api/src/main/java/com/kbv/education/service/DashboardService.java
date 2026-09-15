@@ -16,6 +16,9 @@ public interface DashboardService {
     /** Score dashboard for the given student user. */
     ScoreDashboardResponse studentDashboard(UUID studentUserId);
 
-    /** Score dashboard for the student linked to the given parent user. */
-    ScoreDashboardResponse parentDashboard(UUID parentUserId);
+    /**
+     * Score dashboard for one of the parent's linked students. {@code requestedStudentId}
+     * selects which child for a multi-child parent; null defaults to their first-linked child.
+     */
+    ScoreDashboardResponse parentDashboard(UUID parentUserId, UUID requestedStudentId);
 }

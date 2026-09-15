@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 /** Progress, activity timeline and calendar for the current student or parent. */
 @Tag(name = "Dashboard — Progress", description = "Student/parent progress, timeline and calendar")
@@ -35,28 +36,33 @@ public class ProgressController {
 
     @Operation(summary = "Get my progress statistics (current month + course total)")
     @GetMapping("/progress")
-    public ApiResponse<StudentProgressResponse> progress(@AuthenticationPrincipal UserPrincipal principal) {
-        return ApiResponse.success(progressService.getProgress(principal.getId()));
+    public ApiResponse<StudentProgressResponse> progress(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam(required = false) UUID studentId) {
+        return ApiResponse.success(progressService.getProgress(principal.getId(), studentId));
     }
 
     @Operation(summary = "Get my activity timeline (newest first)")
     @GetMapping("/activity")
     public ApiResponse<PageResponse<ActivityLogResponse>> activity(
             @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam(required = false) UUID studentId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.success(activityService.list(progressService.resolveStudentId(principal.getId()), page, size));
+        return ApiResponse.success(
+                activityService.list(progressService.resolveStudentId(principal.getId(), studentId), page, size));
     }
 
     @Operation(summary = "Get my activity calendar for a date range (defaults to the current month)")
     @GetMapping("/calendar")
     public ApiResponse<List<StudyDayResponse>> calendar(
             @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam(required = false) UUID studentId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         LocalDate start = from != null ? from : LocalDate.now().withDayOfMonth(1);
         LocalDate end = to != null ? to : start.plusMonths(1).minusDays(1);
         return ApiResponse.success(
-                activityService.calendar(progressService.resolveStudentId(principal.getId()), start, end));
+                activityService.calendar(progressService.resolveStudentId(principal.getId(), studentId), start, end));
     }
 }

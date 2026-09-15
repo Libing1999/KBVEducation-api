@@ -15,6 +15,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -29,15 +30,20 @@ public class ParentCertificateController {
 
     private final CertificateService certificateService;
 
-    @Operation(summary = "List my linked student's certificates")
+    @Operation(summary = "List one of my linked students' certificates")
     @GetMapping
-    public ApiResponse<List<CertificateResponse>> list(@AuthenticationPrincipal UserPrincipal principal) {
-        return ApiResponse.success(certificateService.listForParent(principal.getId()));
+    public ApiResponse<List<CertificateResponse>> list(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam(required = false) UUID studentId) {
+        return ApiResponse.success(certificateService.listForParent(principal.getId(), studentId));
     }
 
-    @Operation(summary = "Download one of my linked student's certificates")
+    @Operation(summary = "Download one of my linked students' certificates")
     @GetMapping("/{id}/download")
-    public ResponseEntity<Resource> download(@AuthenticationPrincipal UserPrincipal principal, @PathVariable UUID id) {
-        return FileDownloads.attachment(certificateService.downloadForParent(principal.getId(), id));
+    public ResponseEntity<Resource> download(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID id,
+            @RequestParam(required = false) UUID studentId) {
+        return FileDownloads.attachment(certificateService.downloadForParent(principal.getId(), id, studentId));
     }
 }

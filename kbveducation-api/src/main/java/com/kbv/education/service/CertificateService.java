@@ -17,8 +17,11 @@ public interface CertificateService {
     /** The authenticated student's own certificates. */
     List<CertificateResponse> listForStudent(UUID studentId);
 
-    /** A parent's linked student's certificates. */
-    List<CertificateResponse> listForParent(UUID parentId);
+    /**
+     * One of a parent's linked students' certificates. {@code requestedStudentId} selects which
+     * child for a multi-child parent; null defaults to their first-linked child.
+     */
+    List<CertificateResponse> listForParent(UUID parentId, UUID requestedStudentId);
 
     /** Any admin may download any certificate. */
     FileDownloadResult downloadForAdmin(UUID certificateId);
@@ -26,6 +29,6 @@ public interface CertificateService {
     /** A student may only download their own certificate. */
     FileDownloadResult downloadForStudent(UUID studentId, UUID certificateId);
 
-    /** A parent may only download their linked student's certificate. */
-    FileDownloadResult downloadForParent(UUID parentId, UUID certificateId);
+    /** A parent may only download a certificate belonging to one of their linked students. */
+    FileDownloadResult downloadForParent(UUID parentId, UUID certificateId, UUID requestedStudentId);
 }

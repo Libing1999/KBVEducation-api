@@ -29,6 +29,8 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, UUID>,
     // --- progress statistics ---
     long countByStudent_IdAndDeletedFalse(UUID studentId);
 
+    long countByStudent_IdAndStatusAndDeletedFalse(UUID studentId, AttemptStatus status);
+
     long countByStudent_IdAndSubmittedAtBetweenAndDeletedFalse(UUID studentId, Instant from, Instant to);
 
     /** Platform-wide count in a window — powers the admin dashboard's Activity Overview chart. */

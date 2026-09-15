@@ -21,14 +21,13 @@ import org.springframework.stereotype.Component;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 /**
- * Parents have no direct cohort — COHORT/STUDENT filters match a parent whose
- * linked student satisfies them, resolved via {@link ParentStudentRepository}
- * (Phase 1: one student per parent) rather than a Specification join.
+ * Parents have no direct cohort — COHORT/STUDENT filters match a parent with at
+ * least one linked student satisfying them, resolved via {@link ParentStudentRepository}
+ * rather than a Specification join. A parent may have several linked students.
  */
 @Component
 @RequiredArgsConstructor
@@ -71,26 +70,30 @@ public class ParentsExportHandler implements ExportDatasetHandler {
                         .map(sc -> sc.getStudent().getId()).toList();
 
         return userRepository.findAll(spec).stream()
-                .map(parent -> Map.entry(parent, parentStudentRepository.findByParent_IdAndDeletedFalse(parent.getId())))
+                .map(parent -> Map.entry(parent,
+                        parentStudentRepository.findAllByParent_IdAndDeletedFalseOrderByCreatedAtAsc(parent.getId())))
                 .filter(e -> matchesStudentFilter(e.getValue(), filters.studentId()))
                 .filter(e -> matchesCohortFilter(e.getValue(), cohortStudentIds))
-                .map(e -> toRow(e.getKey(), e.getValue().map(ParentStudent::getStudent).orElse(null)))
+                .map(e -> toRow(e.getKey(), e.getValue()))
                 .toList();
     }
 
-    private boolean matchesStudentFilter(Optional<ParentStudent> link, UUID studentId) {
-        return studentId == null || link.map(l -> l.getStudent().getId().equals(studentId)).orElse(false);
+    private boolean matchesStudentFilter(List<ParentStudent> links, UUID studentId) {
+        return studentId == null || links.stream().anyMatch(l -> l.getStudent().getId().equals(studentId));
     }
 
-    private boolean matchesCohortFilter(Optional<ParentStudent> link, List<UUID> cohortStudentIds) {
+    private boolean matchesCohortFilter(List<ParentStudent> links, List<UUID> cohortStudentIds) {
         return cohortStudentIds == null
-                || link.map(l -> cohortStudentIds.contains(l.getStudent().getId())).orElse(false);
+                || links.stream().anyMatch(l -> cohortStudentIds.contains(l.getStudent().getId()));
     }
 
-    private List<Object> toRow(User parent, User linkedStudent) {
+    private List<Object> toRow(User parent, List<ParentStudent> links) {
+        String linkedStudents = links.stream()
+                .map(l -> l.getStudent().getFullName())
+                .collect(java.util.stream.Collectors.joining(", "));
         return List.of(
                 parent.getFullName(), parent.getEmail(), parent.getPhone() != null ? parent.getPhone() : "",
-                parent.getStatus().name(), linkedStudent != null ? linkedStudent.getFullName() : "",
+                parent.getStatus().name(), linkedStudents,
                 parent.getCreatedAt().toString());
     }
 
