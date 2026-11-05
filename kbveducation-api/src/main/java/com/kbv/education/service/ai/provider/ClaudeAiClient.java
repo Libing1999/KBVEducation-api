@@ -173,6 +173,22 @@ public class ClaudeAiClient implements AiClient {
         }
     }
 
+    @Override
+    public List<AiModelOption> listModels() {
+        if (client == null) {
+            return List.of();
+        }
+        try {
+            // The Models API returns the newest models first.
+            List<AiModelOption> models = new ArrayList<>();
+            client.models().list().autoPager().forEach(m -> models.add(new AiModelOption(m.id(), m.displayName())));
+            return models;
+        } catch (AnthropicException e) {
+            log.warn("Could not list Claude models: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
     // --- helpers -----------------------------------------------------------
 
     /** Instructions first, then the reference pack; the cache breakpoint sits on the last block. */

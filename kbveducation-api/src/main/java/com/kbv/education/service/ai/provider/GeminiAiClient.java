@@ -19,6 +19,8 @@ import com.google.genai.types.GetBatchJobConfig;
 import com.google.genai.types.InlinedRequest;
 import com.google.genai.types.InlinedResponse;
 import com.google.genai.types.JobState;
+import com.google.genai.types.ListModelsConfig;
+import com.google.genai.types.Model;
 import com.google.genai.types.Part;
 import com.google.genai.types.UploadFileConfig;
 import com.kbv.education.config.AiProperties;
@@ -225,6 +227,29 @@ public class GeminiAiClient implements AiClient {
             client.batches.cancel(providerBatchId, CancelBatchJobConfig.builder().build());
         } catch (RuntimeException e) {
             log.warn("Could not cancel Gemini batch {}: {}", providerBatchId, e.getMessage());
+        }
+    }
+
+    /** Gemini models that can answer requests (generateContent), named without the "models/" prefix. */
+    @Override
+    public List<AiModelOption> listModels() {
+        if (client == null) {
+            return List.of();
+        }
+        try {
+            List<AiModelOption> models = new ArrayList<>();
+            for (Model m : client.models.list(ListModelsConfig.builder().pageSize(100).build())) {
+                boolean generates = m.supportedActions().map(a -> a.contains("generateContent")).orElse(true);
+                String name = m.name().orElse("");
+                if (generates && !name.isBlank()) {
+                    String id = name.startsWith("models/") ? name.substring("models/".length()) : name;
+                    models.add(new AiModelOption(id, m.displayName().orElse(id)));
+                }
+            }
+            return models;
+        } catch (RuntimeException e) {
+            log.warn("Could not list Gemini models: {}", e.getMessage());
+            return List.of();
         }
     }
 

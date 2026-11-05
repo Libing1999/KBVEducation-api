@@ -9,6 +9,7 @@ import com.kbv.education.dto.ai.UpdateAiSettingsRequest;
 import com.kbv.education.dto.response.ApiResponse;
 import com.kbv.education.exception.BusinessRuleException;
 import com.kbv.education.service.ai.AiEngine;
+import com.kbv.education.service.ai.AiModelCatalog;
 import com.kbv.education.service.ai.AiReviewService;
 import com.kbv.education.service.ai.AiSettingsService;
 import com.kbv.education.service.ai.MorningDashboardService;
@@ -49,6 +50,7 @@ public class AdminAiController {
     private final ReferencePackService referencePackService;
     private final AiEngine engine;
     private final MorningDashboardService morningDashboardService;
+    private final AiModelCatalog modelCatalog;
 
     @Operation(summary = "Get AI settings (keys are never returned, only whether each is set up)")
     @GetMapping("/settings")
@@ -60,6 +62,12 @@ public class AdminAiController {
     @PutMapping("/settings")
     public ApiResponse<AiSettingsResponse> updateSettings(@Valid @RequestBody UpdateAiSettingsRequest request) {
         return ApiResponse.success("AI settings saved", settingsService.update(request));
+    }
+
+    @Operation(summary = "Models offered by Claude and Gemini, for the Settings dropdowns")
+    @GetMapping("/models")
+    public ApiResponse<AiModelCatalog.Models> models(@RequestParam(defaultValue = "false") boolean refresh) {
+        return ApiResponse.success(modelCatalog.models(refresh));
     }
 
     @Operation(summary = "AI status: providers set up, running, waiting jobs, this month's usage")

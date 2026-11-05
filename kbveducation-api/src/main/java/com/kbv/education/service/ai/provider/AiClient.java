@@ -40,6 +40,12 @@ public interface AiClient {
     /** Best-effort cancel of a batch that ran past its deadline. */
     void cancelBatch(String providerBatchId);
 
+    /**
+     * The models this provider currently offers, newest first, for the Settings dropdowns.
+     * Empty when the provider is not set up or cannot be reached.
+     */
+    List<AiModelOption> listModels();
+
     enum BatchState {
         RUNNING,
         ENDED,
