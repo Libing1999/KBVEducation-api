@@ -20,7 +20,9 @@ CREATE TABLE ai_settings (
     claude_effort                  VARCHAR(10)  NOT NULL DEFAULT 'MEDIUM',
     call_mode                      VARCHAR(10)  NOT NULL DEFAULT 'BATCH',
     backup_enabled                 BOOLEAN      NOT NULL DEFAULT TRUE,
-    nightly_run_time               TIME         NOT NULL DEFAULT '23:00',
+    -- "HH:mm" wall-clock time in run_timezone. Stored as text, not TIME: the app converts
+    -- times to UTC (hibernate.jdbc.time_zone), which would shift a TIME by the server's offset.
+    nightly_run_time               VARCHAR(5)   NOT NULL DEFAULT '23:00',
     run_timezone                   VARCHAR(50)  NOT NULL DEFAULT 'Asia/Dubai',
     auto_approve_enabled           BOOLEAN      NOT NULL DEFAULT FALSE,
     auto_approve_min_rating        INTEGER      NOT NULL DEFAULT 9,

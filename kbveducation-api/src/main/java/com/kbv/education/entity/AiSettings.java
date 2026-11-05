@@ -4,7 +4,9 @@ import com.kbv.education.entity.enums.AiCallMode;
 import com.kbv.education.entity.enums.AiEffort;
 import com.kbv.education.entity.enums.AiJobType;
 import com.kbv.education.entity.enums.AiProvider;
+import com.kbv.education.entity.converter.LocalTimeTextConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -62,7 +64,9 @@ public class AiSettings extends BaseEntity {
     @Column(name = "backup_enabled", nullable = false)
     private boolean backupEnabled = true;
 
-    @Column(name = "nightly_run_time", nullable = false)
+    /** Wall-clock time in {@code runTimezone}; stored as "HH:mm" text so it never shifts. */
+    @Convert(converter = LocalTimeTextConverter.class)
+    @Column(name = "nightly_run_time", nullable = false, length = 5)
     private LocalTime nightlyRunTime = LocalTime.of(23, 0);
 
     @Column(name = "run_timezone", nullable = false, length = 50)
