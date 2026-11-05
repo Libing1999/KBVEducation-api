@@ -1,6 +1,8 @@
 package com.kbv.education.entity;
 
+import com.kbv.education.entity.enums.AiJobStatus;
 import com.kbv.education.entity.enums.ReflectionType;
+import com.kbv.education.entity.enums.TranscriptStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -61,4 +63,27 @@ public class ReflectionEntry extends BaseEntity {
 
     @Column(name = "submitted_at", nullable = false)
     private Instant submittedAt = Instant.now();
+
+    /** Voice-note transcription state; a voice note is transcribed at most once. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "transcript_status", nullable = false, length = 20)
+    private TranscriptStatus transcriptStatus = TranscriptStatus.NONE;
+
+    @Column(name = "transcript_model", length = 100)
+    private String transcriptModel;
+
+    @Column(name = "transcribed_at")
+    private Instant transcribedAt;
+
+    // Copy of the current AI headline (see AiResult) for the admin lists.
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ai_status", length = 20)
+    private AiJobStatus aiStatus;
+
+    @Column(name = "ai_flag_count")
+    private Integer aiFlagCount;
+
+    @Column(name = "ai_needs_attention", nullable = false)
+    private boolean aiNeedsAttention = false;
 }

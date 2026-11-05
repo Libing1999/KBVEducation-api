@@ -15,6 +15,7 @@ import com.kbv.education.entity.ReflectionEntry;
 import com.kbv.education.entity.ReflectionQuestion;
 import com.kbv.education.entity.User;
 import com.kbv.education.entity.enums.ReflectionType;
+import com.kbv.education.entity.enums.TranscriptStatus;
 import com.kbv.education.exception.BadRequestException;
 import com.kbv.education.exception.BusinessRuleException;
 import com.kbv.education.exception.ResourceNotFoundException;
@@ -348,6 +349,10 @@ public class ReflectionServiceImpl implements ReflectionService {
             entry.setAudioFileType(null);
             entry.setAudioFileSize(null);
             entry.setTranscript(null);
+            // A replaced voice note is a new voice note: it gets transcribed in its own right.
+            entry.setTranscriptStatus(TranscriptStatus.NONE);
+            entry.setTranscriptModel(null);
+            entry.setTranscribedAt(null);
         }
     }
 
@@ -422,7 +427,11 @@ public class ReflectionServiceImpl implements ReflectionService {
                 entry.getSubmittedAt(),
                 entry.getReflectionType(),
                 buildPreview(entry),
-                entry.getAudioStoredName() != null);
+                entry.getAudioStoredName() != null,
+                entry.getAiStatus(),
+                entry.getAiFlagCount(),
+                entry.isAiNeedsAttention(),
+                entry.getTranscriptStatus());
     }
 
     private String buildPreview(ReflectionEntry entry) {

@@ -34,4 +34,20 @@ public interface ReflectionEntryRepository extends JpaRepository<ReflectionEntry
     // --- streaks ---
     @Query("select r.reflectionDate from ReflectionEntry r where r.student.id = :sid and r.deleted = false")
     List<LocalDate> reflectionDates(@Param("sid") UUID studentId);
+
+    // --- AI engine ---
+
+    /** Reflections submitted since {@code from} that the AI has never been given. */
+    @Query("select r.id from ReflectionEntry r where r.deleted = false and r.createdAt >= :from "
+            + "and not exists (select j.id from AiJob j where j.targetId = r.id) order by r.createdAt")
+    List<UUID> findIdsNotYetSentToAi(@Param("from") java.time.Instant from);
+
+    /** Voice notes not yet turned into text (each is transcribed at most once). */
+    @Query("select r.id from ReflectionEntry r where r.deleted = false and r.createdAt >= :from "
+            + "and r.audioStoredName is not null "
+            + "and r.transcriptStatus = com.kbv.education.entity.enums.TranscriptStatus.NONE order by r.createdAt")
+    List<UUID> findIdsAwaitingTranscription(@Param("from") java.time.Instant from);
+
+    List<ReflectionEntry> findByCreatedAtGreaterThanEqualAndCreatedAtLessThanAndDeletedFalse(java.time.Instant from,
+                                                                                            java.time.Instant to);
 }

@@ -1,7 +1,10 @@
 package com.kbv.education.controller;
 
 import com.kbv.education.controller.support.FileDownloads;
+import com.kbv.education.dto.ai.AiPracticeCardResponse;
 import com.kbv.education.dto.practice.AdminUpdatePracticeRequest;
+import com.kbv.education.dto.practice.AiPracticeFilter;
+import com.kbv.education.dto.practice.BulkApproveRequest;
 import com.kbv.education.dto.practice.PracticeSessionResponse;
 import com.kbv.education.dto.practice.ReviewDecisionRequest;
 import com.kbv.education.dto.practice.ReviewNoteRequest;
@@ -9,11 +12,15 @@ import com.kbv.education.dto.practice.ReviewRequestAdminSummary;
 import com.kbv.education.dto.practice.ReviewRequestResponse;
 import com.kbv.education.dto.response.ApiResponse;
 import com.kbv.education.dto.response.PageResponse;
+import com.kbv.education.entity.enums.AiJobStatus;
+import com.kbv.education.entity.enums.AiJobType;
 import com.kbv.education.entity.enums.PracticeStatus;
 import com.kbv.education.entity.enums.ReviewRequestStatus;
 import com.kbv.education.entity.enums.StudyType;
 import com.kbv.education.security.UserPrincipal;
 import com.kbv.education.service.PracticeService;
+import com.kbv.education.service.ai.AiEngine;
+import com.kbv.education.service.ai.AiReviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -24,12 +31,14 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 /** Admin practice review workflow (SUPER_ADMIN only). */
@@ -41,6 +50,8 @@ import java.util.UUID;
 public class AdminPracticeController {
 
     private final PracticeService practiceService;
+    private final AiReviewService aiReviewService;
+    private final AiEngine aiEngine;
 
     @Operation(summary = "List practice sessions with filter and search")
     @GetMapping
@@ -50,12 +61,56 @@ public class AdminPracticeController {
             @RequestParam(required = false) PracticeStatus status,
             @RequestParam(required = false) StudyType studyType,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) String recommendation,
+            @RequestParam(required = false) Integer minRating,
+            @RequestParam(required = false) Integer maxRating,
+            @RequestParam(required = false) Boolean flagged,
+            @RequestParam(required = false) AiJobStatus aiStatus,
+            @RequestParam(required = false) Boolean autoApproved,
+            @RequestParam(required = false) Boolean spotCheck,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "createdAt") String sort,
             @RequestParam(defaultValue = "desc") String direction) {
-        return ApiResponse.success(
-                practiceService.adminList(cohortId, studentId, status, studyType, search, page, size, sort, direction));
+        AiPracticeFilter aiFilter = new AiPracticeFilter(recommendation, minRating, maxRating, flagged, aiStatus,
+                autoApproved, spotCheck);
+        return ApiResponse.success(practiceService.adminList(cohortId, studentId, status, studyType, search, aiFilter,
+                page, size, sort, direction));
+    }
+
+    @Operation(summary = "Sessions the AI auto-approved, newest first (each can be undone)")
+    @GetMapping("/auto-approved")
+    public ApiResponse<List<PracticeSessionResponse>> autoApproved() {
+        return ApiResponse.success(practiceService.autoApprovedList());
+    }
+
+    @Operation(summary = "Approve several sessions at once (only those still waiting)")
+    @PostMapping("/bulk-approve")
+    public ApiResponse<Integer> bulkApprove(@AuthenticationPrincipal UserPrincipal principal,
+                                            @Valid @RequestBody BulkApproveRequest request) {
+        int approved = practiceService.bulkApprove(request.ids(), principal.getId());
+        return ApiResponse.success(approved + " session(s) approved", approved);
+    }
+
+    @Operation(summary = "The AI review card for one session")
+    @GetMapping("/{id}/ai")
+    public ApiResponse<AiPracticeCardResponse> aiCard(@PathVariable UUID id) {
+        return ApiResponse.success(aiReviewService.practiceCard(id));
+    }
+
+    @Operation(summary = "Analyse this session again now (normal call)")
+    @PostMapping("/{id}/ai/reanalyse")
+    public ApiResponse<Void> reanalyse(@PathVariable UUID id) {
+        practiceService.adminGet(id); // 404 if it does not exist
+        aiEngine.startReanalyse(AiJobType.PRACTICE_REVIEW, id);
+        return ApiResponse.success("Analysis started", null);
+    }
+
+    @Operation(summary = "Undo an auto-approval (back to waiting)")
+    @PutMapping("/{id}/undo-auto-approve")
+    public ApiResponse<PracticeSessionResponse> undoAutoApprove(@AuthenticationPrincipal UserPrincipal principal,
+                                                                @PathVariable UUID id) {
+        return ApiResponse.success("Auto-approval undone", practiceService.undoAutoApprove(id, principal.getId()));
     }
 
     @Operation(summary = "List re-review requests")
@@ -105,7 +160,8 @@ public class AdminPracticeController {
                                                         @PathVariable UUID id,
                                                         @RequestBody(required = false) ReviewDecisionRequest body) {
         String comment = body == null ? null : body.comment();
-        return ApiResponse.success("Practice approved", practiceService.approve(id, principal.getId(), comment));
+        String reason = body == null ? null : body.overrideReason();
+        return ApiResponse.success("Practice approved", practiceService.approve(id, principal.getId(), comment, reason));
     }
 
     @Operation(summary = "Reject a practice session")
@@ -114,7 +170,8 @@ public class AdminPracticeController {
                                                        @PathVariable UUID id,
                                                        @RequestBody(required = false) ReviewDecisionRequest body) {
         String comment = body == null ? null : body.comment();
-        return ApiResponse.success("Practice rejected", practiceService.reject(id, principal.getId(), comment));
+        String reason = body == null ? null : body.overrideReason();
+        return ApiResponse.success("Practice rejected", practiceService.reject(id, principal.getId(), comment, reason));
     }
 
     @Operation(summary = "Edit a practice session (subject, date, duration, study type, notes, comment)")

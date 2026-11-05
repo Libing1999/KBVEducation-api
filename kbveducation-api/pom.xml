@@ -24,6 +24,8 @@
         <lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
         <jjwt.version>0.12.6</jjwt.version>
         <springdoc.version>2.6.0</springdoc.version>
+        <!-- anthropic-java 3.x is built against Jackson 2.19; Boot 3.3 would otherwise pin 2.17 -->
+        <jackson-bom.version>2.19.4</jackson-bom.version>
     </properties>
 
     <dependencies>
@@ -149,6 +151,18 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
+        <!-- AI providers: Claude (primary) and Gemini (backup + voice-note transcription) -->
+        <dependency>
+            <groupId>com.anthropic</groupId>
+            <artifactId>anthropic-java</artifactId>
+            <version>3.2.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.genai</groupId>
+            <artifactId>google-genai</artifactId>
+            <version>1.78.0</version>
         </dependency>
 
         <!-- Test -->
