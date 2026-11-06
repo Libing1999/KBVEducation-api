@@ -45,4 +45,11 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
             + "or lower(u.firstName) like lower(concat('%', :q, '%')) "
             + "or lower(u.lastName) like lower(concat('%', :q, '%')))")
     List<User> search(@Param("q") String query, Pageable pageable);
+
+    /** Next number for a student code-name ("S-0007"); see V14__ai_engine.sql. */
+    @Query(value = "SELECT nextval('student_code_seq')", nativeQuery = true)
+    long nextStudentCodeNumber();
+
+    /** Everyone whose name must be removed before text is sent to the AI. */
+    List<User> findByDeletedFalse();
 }
