@@ -1,6 +1,7 @@
 package com.kbv.education.repository;
 
 import com.kbv.education.entity.Homework;
+import java.util.Collection;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -30,4 +31,8 @@ public interface HomeworkRepository extends JpaRepository<Homework, UUID> {
 
     @Query("select h from Homework h where h.deleted = false and lower(h.title) like lower(concat('%', :q, '%'))")
     List<Homework> search(@Param("q") String query, Pageable pageable);
+
+    /** Homework of these cohorts that was due in the range (pillar analytics). */
+    List<Homework> findByLesson_Cohort_IdInAndDueDateBetweenAndDeletedFalse(Collection<UUID> cohortIds,
+                                                                           Instant from, Instant to);
 }

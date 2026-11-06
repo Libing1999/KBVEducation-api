@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.kbv.education.config.AiProperties;
 import com.kbv.education.entity.AiBatch;
+import com.kbv.education.entity.AiFieldDefinition;
 import com.kbv.education.entity.AiJob;
 import com.kbv.education.entity.AiSettings;
 import com.kbv.education.entity.enums.AiBatchStatus;
@@ -15,6 +16,7 @@ import com.kbv.education.entity.enums.AiJobType;
 import com.kbv.education.entity.enums.AiProvider;
 import com.kbv.education.entity.enums.StudyType;
 import com.kbv.education.entity.enums.TranscriptStatus;
+import com.kbv.education.repository.AiFieldDefinitionRepository;
 import com.kbv.education.service.PracticeService;
 import com.kbv.education.service.ai.provider.AiBatchSubmitException;
 import com.kbv.education.service.ai.provider.AiClient;
@@ -83,6 +85,7 @@ public class AiEngine {
     private final FileStorageService fileStorageService;
     private final ObjectMapper objectMapper;
     private final TaskExecutor aiExecutor;
+    private final AiFieldDefinitionRepository fieldRepository;
 
     /** Only one run or batch check at a time. */
     private final AtomicBoolean busy = new AtomicBoolean(false);
@@ -91,7 +94,8 @@ public class AiEngine {
                     ClaudeAiClient claude, GeminiAiClient gemini, AiResultValidator validator,
                     AiProperties properties, PracticeService practiceService,
                     FileStorageService fileStorageService, ObjectMapper objectMapper,
-                    @Qualifier("aiExecutor") TaskExecutor aiExecutor) {
+                    @Qualifier("aiExecutor") TaskExecutor aiExecutor,
+                    AiFieldDefinitionRepository fieldRepository) {
         this.settingsService = settingsService;
         this.referencePackService = referencePackService;
         this.store = store;
@@ -103,6 +107,7 @@ public class AiEngine {
         this.fileStorageService = fileStorageService;
         this.objectMapper = objectMapper;
         this.aiExecutor = aiExecutor;
+        this.fieldRepository = fieldRepository;
     }
 
     /** Everything one pass needs, read once. */
@@ -111,7 +116,8 @@ public class AiEngine {
 
     /** What is sent for one job: one part normally, several for a very long transcript. */
     private record Payload(String instructions, Map<String, Object> schema, String referencePack,
-                           List<String> parts, String sourceText, int turnCount) {
+                           List<String> parts, String sourceText, int turnCount,
+                           List<AiFieldDefinition> customFields) {
     }
 
     private record Prepared(UUID jobId, UUID targetId, AiJobType type, AiProvider provider, Payload payload) {
@@ -187,6 +193,38 @@ public class AiEngine {
             } catch (RuntimeException e) {
                 log.error("Re-analysis of {} {} failed: {}", type, targetId, e.getMessage(), e);
             }
+        });
+    }
+
+    /**
+     * Analyse many older items again, one after another, as normal calls (memo 17.10.2026, 2.1:
+     * "I can choose to run older sessions again to fill [a new field] in"). Runs in the background;
+     * each item keeps its earlier results, which stop being the current ones.
+     */
+    public void startReanalyseMany(AiJobType type, List<UUID> targetIds) {
+        if (targetIds.isEmpty()) {
+            return;
+        }
+        aiExecutor.execute(() -> {
+            AiSettings settings = settingsService.getActive();
+            RunContext ctx = new RunContext(settings, store.redactor());
+            ReferencePackService.ActivePack pack = referencePackService.activePack();
+            int done = 0;
+            for (UUID targetId : targetIds) {
+                try {
+                    if (type == AiJobType.REFLECTION_REVIEW) {
+                        transcribe(ctx, targetId);
+                    }
+                    Prepared prepared = prepare(ctx, pack, type, targetId);
+                    if (prepared != null) {
+                        process(ctx, prepared, null);
+                    }
+                    done++;
+                } catch (RuntimeException e) {
+                    log.error("Re-analysis of {} {} failed: {}", type, targetId, e.getMessage(), e);
+                }
+            }
+            log.info("Re-analysed {} of {} {} item(s)", done, targetIds.size(), type);
         });
     }
 
@@ -327,8 +365,9 @@ public class AiEngine {
                     data.studyDate().toString(), lengthFacts, TranscriptTurns.numbered(chunks.get(i)), note));
         }
         String source = turns.stream().map(TranscriptTurns.Turn::text).collect(Collectors.joining("\n"));
-        return new Payload(AiPrompts.PRACTICE_INSTRUCTIONS, AiPrompts.practiceSchema(), packText, parts, source,
-                turns.size());
+        List<AiFieldDefinition> fields = customFields(AiJobType.PRACTICE_REVIEW);
+        return new Payload(AiPrompts.PRACTICE_INSTRUCTIONS, AiPrompts.practiceSchema(fields), packText, parts, source,
+                turns.size(), fields);
     }
 
     private Payload reflectionPayload(RunContext ctx, String packText, UUID id) {
@@ -340,8 +379,14 @@ public class AiEngine {
         }
         String content = AiPrompts.reflectionContent(data.date().toString(), typed, voice);
         String source = (typed == null ? "" : typed) + "\n" + (voice == null ? "" : voice);
-        return new Payload(AiPrompts.REFLECTION_INSTRUCTIONS, AiPrompts.reflectionSchema(), packText,
-                List.of(content), source, 0);
+        List<AiFieldDefinition> fields = customFields(AiJobType.REFLECTION_REVIEW);
+        return new Payload(AiPrompts.REFLECTION_INSTRUCTIONS, AiPrompts.reflectionSchema(fields), packText,
+                List.of(content), source, 0, fields);
+    }
+
+    /** The admin's own fields for this kind of job, as they stand now (memo 17.10.2026, 2.1). */
+    private List<AiFieldDefinition> customFields(AiJobType type) {
+        return fieldRepository.findByJobTypeAndActiveTrueAndDeletedFalseOrderByDisplayOrderAscCreatedAtAsc(type);
     }
 
     /** Lengths are counted by the app, never by the AI (memo 12.10.2026, 4.2). */
@@ -462,7 +507,7 @@ public class AiEngine {
             }
             try {
                 parts.add(validator.validate(p.type(), response.text(), p.payload().sourceText(),
-                        p.payload().turnCount()));
+                        p.payload().turnCount(), p.payload().customFields()));
             } catch (AiResultValidator.InvalidResultException e) {
                 return Outcome.failed(AiFailureReason.INVALID_FORMAT, e.getMessage());
             }
@@ -645,7 +690,7 @@ public class AiEngine {
             AiResultValidator.Validated validated;
             try {
                 validated = validator.validate(p.type(), response.text(), p.payload().sourceText(),
-                        p.payload().turnCount());
+                        p.payload().turnCount(), p.payload().customFields());
             } catch (AiResultValidator.InvalidResultException e) {
                 store.countFormatRetry(p.jobId());
                 process(ctx, p, AiResponse.failed(AiFailureReason.INVALID_FORMAT, e.getMessage()));

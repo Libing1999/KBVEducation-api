@@ -1,5 +1,6 @@
 package com.kbv.education.controller;
 
+import com.kbv.education.dto.ai.AiFieldResponse;
 import com.kbv.education.dto.ai.AiSettingsResponse;
 import com.kbv.education.dto.ai.AiStatusResponse;
 import com.kbv.education.dto.ai.MorningDashboardResponse;
@@ -9,6 +10,7 @@ import com.kbv.education.dto.ai.UpdateAiSettingsRequest;
 import com.kbv.education.dto.response.ApiResponse;
 import com.kbv.education.exception.BusinessRuleException;
 import com.kbv.education.service.ai.AiEngine;
+import com.kbv.education.service.ai.AiFieldService;
 import com.kbv.education.service.ai.AiModelCatalog;
 import com.kbv.education.service.ai.AiReviewService;
 import com.kbv.education.service.ai.AiSettingsService;
@@ -51,6 +53,7 @@ public class AdminAiController {
     private final AiEngine engine;
     private final MorningDashboardService morningDashboardService;
     private final AiModelCatalog modelCatalog;
+    private final AiFieldService fieldService;
 
     @Operation(summary = "Get AI settings (keys are never returned, only whether each is set up)")
     @GetMapping("/settings")
@@ -93,6 +96,37 @@ public class AdminAiController {
             throw new BusinessRuleException("An AI run is already in progress");
         }
         return ApiResponse.success("AI run started", null);
+    }
+
+    // ------------------------------------------------------------ fields the AI returns (memo 17.10.2026, 2.1)
+
+    @Operation(summary = "All fields the AI returns: built-in first, then your own")
+    @GetMapping("/fields")
+    public ApiResponse<AiFieldResponse.AiFieldList> fields() {
+        return ApiResponse.success(fieldService.list());
+    }
+
+    @Operation(summary = "Add your own field; the AI returns it from the next run")
+    @PostMapping("/fields")
+    public ApiResponse<AiFieldResponse> addField(@Valid @RequestBody AiFieldResponse.CreateAiFieldRequest request) {
+        return ApiResponse.success("Field added. The AI returns it from the next run.", fieldService.create(request));
+    }
+
+    @Operation(summary = "Change a field's name or description, or switch it off (its key and type never change)")
+    @PutMapping("/fields/{id}")
+    public ApiResponse<AiFieldResponse> updateField(@PathVariable UUID id,
+                                                    @Valid @RequestBody AiFieldResponse.UpdateAiFieldRequest request) {
+        return ApiResponse.success("Field saved", fieldService.update(id, request));
+    }
+
+    @Operation(summary = "Analyse items from a date range again (normal calls, full price) to fill in new fields")
+    @PostMapping("/fields/reanalyse")
+    public ApiResponse<Integer> reanalyse(@Valid @RequestBody AiFieldResponse.ReanalyseRequest request) {
+        if (!settingsService.getActive().isAiEnabled()) {
+            throw new BusinessRuleException("Switch the AI on in Settings first");
+        }
+        int count = fieldService.reanalyse(request);
+        return ApiResponse.success(count + " item(s) are being analysed again", count);
     }
 
     // ------------------------------------------------------------ reference pack

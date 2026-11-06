@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.kbv.education.entity.AiFieldDefinition;
 import com.kbv.education.entity.enums.AiJobType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -38,6 +39,55 @@ public class AiResultValidator {
     }
 
     public Validated validate(AiJobType type, String text, String sourceText, int turnCount)
+            throws InvalidResultException {
+        return validate(type, text, sourceText, turnCount, List.of());
+    }
+
+    /** Also checks the admin's own fields in the reply's {@code extra} object. */
+    public Validated validate(AiJobType type, String text, String sourceText, int turnCount,
+                              List<AiFieldDefinition> customFields) throws InvalidResultException {
+        Validated v = validateBuiltIn(type, text, sourceText, turnCount);
+        checkExtra(v.json(), customFields);
+        return v;
+    }
+
+    private void checkExtra(ObjectNode root, List<AiFieldDefinition> fields) throws InvalidResultException {
+        if (fields == null || fields.isEmpty()) {
+            return;
+        }
+        JsonNode extra = root.path("extra");
+        if (!extra.isObject()) {
+            throw new InvalidResultException("extra is missing");
+        }
+        List<String> problems = new ArrayList<>();
+        for (AiFieldDefinition f : fields) {
+            JsonNode v = extra.path(f.getFieldKey());
+            boolean ok = switch (f.getFieldType()) {
+                case NUMBER -> v.isNumber();
+                case RATING -> v.isInt() && v.asInt() >= 1 && v.asInt() <= 10;
+                case YES_NO -> v.isBoolean();
+                case SHORT_TEXT -> v.isTextual();
+                case LIST -> v.isArray() && allText(v);
+            };
+            if (!ok) {
+                problems.add("extra." + f.getFieldKey() + " is not a valid " + f.getFieldType());
+            }
+        }
+        if (!problems.isEmpty()) {
+            throw new InvalidResultException(String.join("; ", problems));
+        }
+    }
+
+    private static boolean allText(JsonNode array) {
+        for (JsonNode item : array) {
+            if (!item.isTextual()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private Validated validateBuiltIn(AiJobType type, String text, String sourceText, int turnCount)
             throws InvalidResultException {
         JsonNode parsed;
         try {
