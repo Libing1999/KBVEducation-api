@@ -77,4 +77,12 @@ public interface PracticeSessionRepository extends JpaRepository<PracticeSession
     /** (student id, latest submission time) for every student who has logged practice. */
     @Query("select p.student.id, max(p.createdAt) from PracticeSession p where p.deleted = false group by p.student.id")
     List<Object[]> lastSubmissionPerStudent();
+
+    // --- AI re-analysis and pillar analytics (Phase 2) ---
+
+    @Query("select p.id from PracticeSession p where p.deleted = false and p.studyDate between :from and :to")
+    List<UUID> findIdsByStudyDateBetween(@Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    List<PracticeSession> findByStudent_IdInAndStudyDateBetweenAndDeletedFalse(Collection<UUID> studentIds,
+                                                                               LocalDate from, LocalDate to);
 }

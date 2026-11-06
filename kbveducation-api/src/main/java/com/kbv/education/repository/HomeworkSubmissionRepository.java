@@ -1,6 +1,7 @@
 package com.kbv.education.repository;
 
 import com.kbv.education.entity.HomeworkSubmission;
+import java.util.Collection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -38,4 +39,9 @@ public interface HomeworkSubmissionRepository extends JpaRepository<HomeworkSubm
             + "where s.student.id = :sid and s.deleted = false and s.submittedAt between :from and :to")
     List<UUID> submittedLessonIdsBetween(@Param("sid") UUID studentId,
                                          @Param("from") Instant from, @Param("to") Instant to);
+
+    List<HomeworkSubmission> findByHomework_IdInAndDeletedFalse(Collection<UUID> homeworkIds);
+
+    List<HomeworkSubmission> findByStudent_IdInAndSubmittedAtBetweenAndDeletedFalse(Collection<UUID> studentIds,
+                                                                                   Instant from, Instant to);
 }

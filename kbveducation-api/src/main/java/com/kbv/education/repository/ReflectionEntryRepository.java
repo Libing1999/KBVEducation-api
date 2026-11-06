@@ -1,6 +1,7 @@
 package com.kbv.education.repository;
 
 import com.kbv.education.entity.ReflectionEntry;
+import java.util.Collection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -50,4 +51,12 @@ public interface ReflectionEntryRepository extends JpaRepository<ReflectionEntry
 
     List<ReflectionEntry> findByCreatedAtGreaterThanEqualAndCreatedAtLessThanAndDeletedFalse(java.time.Instant from,
                                                                                             java.time.Instant to);
+
+    // --- AI re-analysis and pillar analytics (Phase 2) ---
+
+    @Query("select r.id from ReflectionEntry r where r.deleted = false and r.reflectionDate between :from and :to")
+    List<UUID> findIdsByReflectionDateBetween(@Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    List<ReflectionEntry> findByStudent_IdInAndReflectionDateBetweenAndDeletedFalse(Collection<UUID> studentIds,
+                                                                                    LocalDate from, LocalDate to);
 }

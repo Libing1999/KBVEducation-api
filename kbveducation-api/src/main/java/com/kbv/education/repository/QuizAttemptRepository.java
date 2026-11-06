@@ -1,6 +1,7 @@
 package com.kbv.education.repository;
 
 import com.kbv.education.entity.QuizAttempt;
+import java.util.Collection;
 import com.kbv.education.entity.enums.AttemptStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -43,4 +44,8 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, UUID>,
             + "where a.student.id = :sid and a.deleted = false and a.submittedAt between :from and :to")
     List<UUID> completedLessonIdsBetween(@Param("sid") UUID studentId,
                                          @Param("from") Instant from, @Param("to") Instant to);
+
+    List<QuizAttempt> findByStudent_IdInAndStatusAndSubmittedAtBetweenAndDeletedFalse(Collection<UUID> studentIds,
+                                                                                      AttemptStatus status,
+                                                                                      Instant from, Instant to);
 }

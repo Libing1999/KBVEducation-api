@@ -1,5 +1,7 @@
 package com.kbv.education.service.ai;
 
+import com.kbv.education.entity.AiFieldDefinition;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,6 +71,9 @@ public final class AiPrompts {
             by "[name]". Refer to the student by code-name only. Emails and phone numbers show as
             "[email]" and "[phone]".
 
+            If the reply format has an "extra" object, it holds fields the teacher added. Fill each one
+            exactly as its description asks, from this text only.
+
             The teacher's reference pack follows. Use it for every judgement. These output rules always apply.
             """;
 
@@ -94,10 +99,47 @@ public final class AiPrompts {
             Names in the text have been replaced: students by code-names such as "S-0007", other people
             by "[name]". Refer to the student by code-name only.
 
+            If the reply format has an "extra" object, it holds fields the teacher added. Fill each one
+            exactly as its description asks, from this text only.
+
             The teacher's reference pack follows. Use it for every judgement. These output rules always apply.
             """;
 
     /** JSON schema for a practice-session reply. Ranges (1 to 10, turn numbers) are checked by the app. */
+    /** The practice reply format, plus an {@code extra} object for the admin's own fields (if any). */
+    public static Map<String, Object> practiceSchema(List<AiFieldDefinition> customFields) {
+        return withExtra(practiceSchema(), customFields);
+    }
+
+    public static Map<String, Object> reflectionSchema(List<AiFieldDefinition> customFields) {
+        return withExtra(reflectionSchema(), customFields);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> withExtra(Map<String, Object> schema, List<AiFieldDefinition> customFields) {
+        if (customFields == null || customFields.isEmpty()) {
+            return schema;
+        }
+        Map<String, Object> extraProps = new LinkedHashMap<>();
+        for (AiFieldDefinition f : customFields) {
+            extraProps.put(f.getFieldKey(), fieldSchema(f));
+        }
+        Map<String, Object> properties = new LinkedHashMap<>((Map<String, Object>) schema.get("properties"));
+        properties.put("extra", object(extraProps));
+        return object(properties);
+    }
+
+    private static Map<String, Object> fieldSchema(AiFieldDefinition f) {
+        String description = f.getLabel() + ": " + f.getDescription();
+        return switch (f.getFieldType()) {
+            case NUMBER -> ordered("type", "number", "description", description);
+            case RATING -> ordered("type", "integer", "description", description + " (a whole number from 1 to 10)");
+            case YES_NO -> ordered("type", "boolean", "description", description);
+            case SHORT_TEXT -> ordered("type", "string", "description", description + " (a short answer)");
+            case LIST -> ordered("type", "array", "items", string(), "description", description);
+        };
+    }
+
     public static Map<String, Object> practiceSchema() {
         Map<String, Object> flag = object(ordered(
                 "type", enumOf(PRACTICE_FLAGS),
