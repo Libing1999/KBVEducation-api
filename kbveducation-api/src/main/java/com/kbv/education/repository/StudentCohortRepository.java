@@ -1,6 +1,7 @@
 package com.kbv.education.repository;
 
 import com.kbv.education.entity.StudentCohort;
+import java.util.Collection;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -16,4 +17,7 @@ public interface StudentCohortRepository extends JpaRepository<StudentCohort, UU
     List<StudentCohort> findByCohort_IdAndActiveTrueAndDeletedFalse(UUID cohortId);
 
     long countByCohort_IdAndActiveTrueAndDeletedFalse(UUID cohortId);
+
+    /** Every cohort link, past and current: a student who moved keeps the old cohort's homework. */
+    List<StudentCohort> findByStudent_IdInAndDeletedFalse(Collection<UUID> studentIds);
 }

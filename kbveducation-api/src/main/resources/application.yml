@@ -40,6 +40,13 @@ spring:
       max-file-size: ${MAX_FILE_SIZE:25MB}
       max-request-size: ${MAX_REQUEST_SIZE:150MB}
 
+  # More than one scheduler thread, so the AI engine's long nightly run never delays
+  # the notification and leaderboard jobs.
+  task:
+    scheduling:
+      pool:
+        size: 4
+
   cache:
     type: caffeine
     cache-names: scoreConfig,systemSettings
@@ -122,6 +129,12 @@ app:
     # Root directory for uploaded files — keep OUTSIDE the project directory.
     base-path: ${STORAGE_BASE_PATH:}
     max-file-size-mb: ${STORAGE_MAX_FILE_SIZE_MB:25}
+  # AI (Claude first, Gemini as backup and voice-note transcriber). Keys come ONLY from the
+  # server environment - never put a key in this file or anywhere in the repository.
+  # A blank key means that AI is "not set up" and is skipped.
+  ai:
+    anthropic-api-key: ${ANTHROPIC_API_KEY:}
+    gemini-api-key: ${GEMINI_API_KEY:}
 
 springdoc:
   swagger-ui:
