@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
@@ -56,4 +57,32 @@ public interface PracticeSessionRepository extends JpaRepository<PracticeSession
     @Query("select p from PracticeSession p where p.deleted = false "
             + "and lower(p.subject) like lower(concat('%', :q, '%'))")
     List<PracticeSession> search(@Param("q") String query, org.springframework.data.domain.Pageable pageable);
+
+    // --- AI engine ---
+
+    /** Sessions submitted since {@code from} that the AI has never been given. */
+    @Query("select p.id from PracticeSession p where p.deleted = false and p.createdAt >= :from "
+            + "and not exists (select j.id from AiJob j where j.targetId = p.id) order by p.createdAt")
+    List<UUID> findIdsNotYetSentToAi(@Param("from") Instant from);
+
+    /** (student id, turn count, character count) of every session of one study type that has turns. */
+    @Query("select p.student.id, p.turnCount, p.transcriptChars from PracticeSession p "
+            + "where p.deleted = false and p.studyType = :type and p.turnCount is not null and p.turnCount > 0")
+    List<Object[]> lengthsForStudyType(@Param("type") StudyType studyType);
+
+    List<PracticeSession> findByAutoApprovedTrueAndDeletedFalseOrderByAutoApprovedAtDesc();
+
+    List<PracticeSession> findByCreatedAtGreaterThanEqualAndCreatedAtLessThanAndDeletedFalse(Instant from, Instant to);
+
+    /** (student id, latest submission time) for every student who has logged practice. */
+    @Query("select p.student.id, max(p.createdAt) from PracticeSession p where p.deleted = false group by p.student.id")
+    List<Object[]> lastSubmissionPerStudent();
+
+    // --- AI re-analysis and pillar analytics (Phase 2) ---
+
+    @Query("select p.id from PracticeSession p where p.deleted = false and p.studyDate between :from and :to")
+    List<UUID> findIdsByStudyDateBetween(@Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    List<PracticeSession> findByStudent_IdInAndStudyDateBetweenAndDeletedFalse(Collection<UUID> studentIds,
+                                                                               LocalDate from, LocalDate to);
 }

@@ -44,6 +44,9 @@ public class AccountFactory {
         user.setPhone(phone);
         user.setRole(role);
         user.setStatus(UserStatus.ACTIVE);
+        if (roleType == RoleType.STUDENT) {
+            user.setCodeName(String.format("S-%04d", userRepository.nextStudentCodeNumber()));
+        }
         return userRepository.save(user);
     }
 }

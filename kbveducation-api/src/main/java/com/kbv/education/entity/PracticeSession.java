@@ -1,5 +1,6 @@
 package com.kbv.education.entity;
 
+import com.kbv.education.entity.enums.AiJobStatus;
 import com.kbv.education.entity.enums.PracticeStatus;
 import com.kbv.education.entity.enums.StudyType;
 import jakarta.persistence.Column;
@@ -69,4 +70,48 @@ public class PracticeSession extends BaseEntity {
 
     @Column(name = "reviewed_at")
     private Instant reviewedAt;
+
+    /** JSON array of numbered turns ({@code n}, {@code speaker}, {@code text}); the transcript itself is never changed. */
+    @Column(name = "transcript_turns", columnDefinition = "text")
+    private String transcriptTurns;
+
+    @Column(name = "turn_count")
+    private Integer turnCount;
+
+    @Column(name = "transcript_chars")
+    private Integer transcriptChars;
+
+    /** LABELS (speaker labels found), PARAGRAPHS (no labels: split on blank lines), or NONE (no transcript). */
+    @Column(name = "turn_split_method", length = 20)
+    private String turnSplitMethod;
+
+    /** Set when the AI auto-approved the session (only possible with auto-approve switched on). */
+    @Column(name = "auto_approved", nullable = false)
+    private boolean autoApproved = false;
+
+    @Column(name = "auto_approved_at")
+    private Instant autoApprovedAt;
+
+    /** Auto-approved, but also placed in the admin's review queue as a spot check. */
+    @Column(name = "spot_check", nullable = false)
+    private boolean spotCheck = false;
+
+    /** The admin's one-line reason when their decision differs from the AI's recommendation. */
+    @Column(name = "ai_override_reason", length = 500)
+    private String aiOverrideReason;
+
+    // Copy of the current AI headline (see AiResult) so the review list can filter and sort.
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ai_status", length = 20)
+    private AiJobStatus aiStatus;
+
+    @Column(name = "ai_trust_rating")
+    private Integer aiTrustRating;
+
+    @Column(name = "ai_recommendation", length = 30)
+    private String aiRecommendation;
+
+    @Column(name = "ai_flag_count")
+    private Integer aiFlagCount;
 }

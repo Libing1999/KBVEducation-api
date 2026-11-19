@@ -1,13 +1,17 @@
 package com.kbv.education.controller;
 
 import com.kbv.education.controller.support.FileDownloads;
+import com.kbv.education.dto.ai.AiReflectionCardResponse;
 import com.kbv.education.dto.reflection.AdminReflectionSummary;
 import com.kbv.education.dto.reflection.ReflectionAnswerInput;
 import com.kbv.education.dto.reflection.ReflectionResponse;
 import com.kbv.education.dto.response.ApiResponse;
 import com.kbv.education.dto.response.PageResponse;
+import com.kbv.education.entity.enums.AiJobType;
 import com.kbv.education.entity.enums.ReflectionType;
 import com.kbv.education.service.ReflectionService;
+import com.kbv.education.service.ai.AiEngine;
+import com.kbv.education.service.ai.AiReviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +21,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -35,6 +40,8 @@ import java.util.UUID;
 public class AdminReflectionController {
 
     private final ReflectionService reflectionService;
+    private final AiReviewService aiReviewService;
+    private final AiEngine aiEngine;
 
     @Operation(summary = "List reflections (newest first) with filter and search")
     @GetMapping
@@ -55,6 +62,20 @@ public class AdminReflectionController {
     @GetMapping("/{id}")
     public ApiResponse<ReflectionResponse> get(@PathVariable UUID id) {
         return ApiResponse.success(reflectionService.adminGet(id));
+    }
+
+    @Operation(summary = "The AI's notes on a reflection, with the voice-note transcript")
+    @GetMapping("/{id}/ai")
+    public ApiResponse<AiReflectionCardResponse> aiCard(@PathVariable UUID id) {
+        return ApiResponse.success(aiReviewService.reflectionCard(id));
+    }
+
+    @Operation(summary = "Analyse this reflection again now (normal call)")
+    @PostMapping("/{id}/ai/reanalyse")
+    public ApiResponse<Void> reanalyse(@PathVariable UUID id) {
+        reflectionService.adminGet(id); // 404 if it does not exist
+        aiEngine.startReanalyse(AiJobType.REFLECTION_REVIEW, id);
+        return ApiResponse.success("Analysis started", null);
     }
 
     @Operation(summary = "Edit a reflection's typed answers")

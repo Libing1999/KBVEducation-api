@@ -4,6 +4,7 @@ import com.kbv.education.audit.Audited;
 import com.kbv.education.dto.file.FileDownloadResult;
 import com.kbv.education.dto.file.FileResponse;
 import com.kbv.education.dto.practice.AdminUpdatePracticeRequest;
+import com.kbv.education.dto.practice.AiPracticeFilter;
 import com.kbv.education.dto.practice.PracticeSessionResponse;
 import com.kbv.education.dto.practice.ReviewRequestAdminSummary;
 import com.kbv.education.dto.practice.ReviewRequestResponse;
@@ -29,9 +30,11 @@ import com.kbv.education.entity.enums.NotificationType;
 import com.kbv.education.entity.enums.ReferenceType;
 import com.kbv.education.repository.spec.PracticeSessionSpecifications;
 import com.kbv.education.service.ActivityService;
+import com.kbv.education.service.AuditLogService;
 import com.kbv.education.service.NotificationService;
 import com.kbv.education.service.PracticeService;
 import com.kbv.education.service.TierEngineService;
+import com.kbv.education.service.ai.AiJobStore;
 import com.kbv.education.service.ai.PracticeValidationService;
 import com.kbv.education.service.storage.FileStorageService;
 import com.kbv.education.service.storage.StoredFile;
@@ -65,10 +68,11 @@ public class PracticeServiceImpl implements PracticeService {
     private static final Set<String> ALLOWED = Set.of("pdf", "doc", "docx", "png", "jpg", "jpeg");
     private static final int MAX_FILE_MB = 25;
     private static final int MAX_NOTES_LEN = 2000;
-    private static final int MAX_TRANSCRIPT_LEN = 5000;
+    // No length limit on transcripts (memo 12.10.2026, 4.1): students paste sessions of any length.
     private static final Set<StudyType> PAST_PAPER_TYPES =
             Set.of(StudyType.PAST_PAPER, StudyType.PAST_PAPER_TEST_DAY, StudyType.PAST_PAPER_IMPROVEMENT_DAY);
-    private static final List<String> SORTABLE = List.of("studyDate", "createdAt", "status");
+    private static final List<String> SORTABLE =
+            List.of("studyDate", "createdAt", "status", "aiTrustRating", "aiFlagCount");
 
     private final PracticeSessionRepository practiceRepository;
     private final PracticeFileRepository practiceFileRepository;
@@ -82,6 +86,8 @@ public class PracticeServiceImpl implements PracticeService {
     private final ActivityService activityService;
     private final NotificationService notificationService;
     private final TierEngineService tierEngineService;
+    private final AiJobStore aiJobStore;
+    private final AuditLogService auditLogService;
 
     @Override
     @Transactional
@@ -105,9 +111,6 @@ public class PracticeServiceImpl implements PracticeService {
         }
         if (notes != null && notes.length() > MAX_NOTES_LEN) {
             throw new BadRequestException("Notes must be " + MAX_NOTES_LEN + " characters or fewer");
-        }
-        if (transcript != null && transcript.length() > MAX_TRANSCRIPT_LEN) {
-            throw new BadRequestException("Transcript must be " + MAX_TRANSCRIPT_LEN + " characters or fewer");
         }
         Integer effectiveYear = year;
         if (isPastPaperType(studyType)) {
@@ -144,7 +147,9 @@ public class PracticeServiceImpl implements PracticeService {
         session.setNotes(notes);
         session.setTranscript(transcript);
         session.setYear(effectiveYear);
-        // Extension point — manual impl returns PENDING_REVIEW.
+        // Numbered turns are saved alongside the transcript, which is kept exactly as pasted.
+        aiJobStore.applyTurns(session);
+        // Always PENDING_REVIEW: the AI never decides at submit time; it runs nightly.
         session.setStatus(validationService.validate(session));
         PracticeSession saved = practiceRepository.save(session);
 
@@ -234,36 +239,121 @@ public class PracticeServiceImpl implements PracticeService {
     @Transactional(readOnly = true)
     public PageResponse<PracticeSessionResponse> adminList(UUID cohortId, UUID studentId, PracticeStatus status,
                                                            StudyType studyType, String search,
+                                                           AiPracticeFilter aiFilter,
                                                            int page, int size, String sort, String direction) {
         Specification<PracticeSession> spec = Specification.where(PracticeSessionSpecifications.notDeleted())
                 .and(PracticeSessionSpecifications.inCohort(cohortId))
                 .and(PracticeSessionSpecifications.forStudent(studentId))
                 .and(PracticeSessionSpecifications.ofStatus(status))
                 .and(PracticeSessionSpecifications.ofType(studyType))
+                .and(PracticeSessionSpecifications.aiFilter(aiFilter))
                 .and(PracticeSessionSpecifications.search(search));
 
         Pageable pageable = PageableBuilder.build(page, size, sort, direction, SORTABLE);
         Page<PracticeSession> result = practiceRepository.findAll(spec, pageable);
-        return PageResponse.from(result, this::toResponse);
+        return PageResponse.from(result, this::toAdminResponse);
     }
 
     @Override
     @Transactional(readOnly = true)
     public PracticeSessionResponse adminGet(UUID id) {
-        return toResponse(load(id));
+        return toAdminResponse(load(id));
     }
 
     @Override
     @Transactional
     @Audited(action = "PRACTICE_APPROVED", entityType = "PRACTICE_SESSION")
     public PracticeSessionResponse approve(UUID id, UUID adminId, String comment) {
-        return decide(id, adminId, PracticeStatus.APPROVED, comment);
+        return decide(id, adminId, PracticeStatus.APPROVED, comment, null);
     }
 
     @Override
     @Transactional
     public PracticeSessionResponse reject(UUID id, UUID adminId, String comment) {
-        return decide(id, adminId, PracticeStatus.REJECTED, comment);
+        return decide(id, adminId, PracticeStatus.REJECTED, comment, null);
+    }
+
+    @Override
+    @Transactional
+    @Audited(action = "PRACTICE_APPROVED", entityType = "PRACTICE_SESSION")
+    public PracticeSessionResponse approve(UUID id, UUID adminId, String comment, String overrideReason) {
+        return decide(id, adminId, PracticeStatus.APPROVED, comment, overrideReason);
+    }
+
+    @Override
+    @Transactional
+    @Audited(action = "PRACTICE_REJECTED", entityType = "PRACTICE_SESSION")
+    public PracticeSessionResponse reject(UUID id, UUID adminId, String comment, String overrideReason) {
+        return decide(id, adminId, PracticeStatus.REJECTED, comment, overrideReason);
+    }
+
+    @Override
+    @Transactional
+    public int bulkApprove(List<UUID> ids, UUID adminId) {
+        String adminEmail = userRepository.findByIdAndDeletedFalse(adminId).map(User::getEmail).orElse(null);
+        int approved = 0;
+        for (UUID id : ids) {
+            PracticeSession session = practiceRepository.findByIdAndDeletedFalse(id).orElse(null);
+            if (session != null && session.getStatus() == PracticeStatus.PENDING_REVIEW) {
+                decide(id, adminId, PracticeStatus.APPROVED, null, null);
+                auditLogService.record("PRACTICE_BULK_APPROVED", "PRACTICE_SESSION", id, adminEmail,
+                        null, null, null, null);
+                approved++;
+            }
+        }
+        log.info("Admin {} bulk-approved {} of {} sessions", adminId, approved, ids.size());
+        return approved;
+    }
+
+    @Override
+    @Transactional
+    public boolean autoApprove(UUID id, boolean spotCheck) {
+        PracticeSession session = practiceRepository.findByIdAndDeletedFalse(id).orElse(null);
+        if (session == null || session.getStatus() != PracticeStatus.PENDING_REVIEW) {
+            return false;
+        }
+        session.setStatus(PracticeStatus.APPROVED);
+        session.setReviewedBy(null);
+        session.setReviewedAt(Instant.now());
+        session.setAutoApproved(true);
+        session.setAutoApprovedAt(Instant.now());
+        session.setSpotCheck(spotCheck);
+        practiceRepository.save(session);
+        notifyStudentOfDecision(session, true);
+        recalculateTierIfPastPaper(session);
+        auditLogService.record("AI_AUTO_APPROVED", "PRACTICE_SESSION", id, AiJobStore.AI_ACTOR, null,
+                "Trust rating " + session.getAiTrustRating() + (spotCheck ? ", also sent for a spot check" : ""),
+                null, null);
+        log.info("AI auto-approved practice {} (spot check: {})", id, spotCheck);
+        return true;
+    }
+
+    @Override
+    @Transactional
+    @Audited(action = "PRACTICE_AUTO_APPROVE_UNDONE", entityType = "PRACTICE_SESSION")
+    public PracticeSessionResponse undoAutoApprove(UUID id, UUID adminId) {
+        PracticeSession session = load(id);
+        if (!session.isAutoApproved()) {
+            throw new BusinessRuleException("This session was not auto-approved");
+        }
+        session.setStatus(PracticeStatus.PENDING_REVIEW);
+        session.setAutoApproved(false);
+        session.setAutoApprovedAt(null);
+        session.setSpotCheck(false);
+        session.setReviewedBy(null);
+        session.setReviewedAt(null);
+        practiceRepository.save(session);
+        recalculateTierIfPastPaper(session);
+        log.info("Admin {} undid the auto-approval of practice {}", adminId, id);
+        return toAdminResponse(session);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PracticeSessionResponse> autoApprovedList() {
+        return practiceRepository.findByAutoApprovedTrueAndDeletedFalseOrderByAutoApprovedAtDesc().stream()
+                .map(this::toAdminResponse)
+                .toList();
     }
 
     @Override
@@ -279,7 +369,7 @@ public class PracticeServiceImpl implements PracticeService {
             session.setAdminComment(request.adminComment());
         }
         practiceRepository.save(session);
-        return toResponse(session);
+        return toAdminResponse(session);
     }
 
     @Override
@@ -336,7 +426,8 @@ public class PracticeServiceImpl implements PracticeService {
         return toReviewResponse(request);
     }
 
-    private PracticeSessionResponse decide(UUID id, UUID adminId, PracticeStatus status, String comment) {
+    private PracticeSessionResponse decide(UUID id, UUID adminId, PracticeStatus status, String comment,
+                                           String overrideReason) {
         PracticeSession session = load(id);
         User admin = userRepository.findByIdAndDeletedFalse(adminId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Admin", adminId));
@@ -344,11 +435,26 @@ public class PracticeServiceImpl implements PracticeService {
         session.setAdminComment(comment);
         session.setReviewedBy(admin);
         session.setReviewedAt(Instant.now());
+        // An admin decision replaces any auto-approval and completes a spot check.
+        session.setAutoApproved(false);
+        session.setAutoApprovedAt(null);
+        session.setSpotCheck(false);
+        if (StringUtils.hasText(overrideReason)) {
+            session.setAiOverrideReason(overrideReason.strip());
+        }
         practiceRepository.save(session);
         notifyStudentOfDecision(session, status == PracticeStatus.APPROVED);
+        recalculateTierIfPastPaper(session);
 
-        // Approval/rejection changes the "Full Papers" tier gate for past-paper sessions even
-        // though it doesn't change Practice %; recalculate the tier only, best-effort.
+        log.info("Admin {} set practice {} to {}", adminId, id, status);
+        return toAdminResponse(session);
+    }
+
+    /**
+     * Approval/rejection changes the "Full Papers" tier gate for past-paper sessions even
+     * though it doesn't change Practice %; recalculate the tier only, best-effort.
+     */
+    private void recalculateTierIfPastPaper(PracticeSession session) {
         if (isPastPaperType(session.getStudyType())) {
             try {
                 tierEngineService.recalculateCalculatedTier(session.getStudent().getId());
@@ -357,9 +463,6 @@ public class PracticeServiceImpl implements PracticeService {
                         session.getStudent().getId(), e.getMessage());
             }
         }
-
-        log.info("Admin {} set practice {} to {}", adminId, id, status);
-        return toResponse(session);
     }
 
     /** Notify the owning student that their practice review was approved or rejected. */
@@ -428,7 +531,27 @@ public class PracticeServiceImpl implements PracticeService {
                 .orElse(null);
     }
 
+    /** Student-facing view: never carries anything the AI wrote. */
     private PracticeSessionResponse toResponse(PracticeSession s) {
+        return toResponse(s, null);
+    }
+
+    /** Admin view: adds the AI headline. */
+    private PracticeSessionResponse toAdminResponse(PracticeSession s) {
+        return toResponse(s, new PracticeSessionResponse.AdminAi(
+                s.getAiStatus(),
+                s.getAiTrustRating(),
+                s.getAiRecommendation(),
+                s.getAiFlagCount(),
+                s.isAutoApproved(),
+                s.getAutoApprovedAt(),
+                s.isSpotCheck(),
+                s.getAiOverrideReason(),
+                s.getTurnCount(),
+                s.getTranscriptChars()));
+    }
+
+    private PracticeSessionResponse toResponse(PracticeSession s, PracticeSessionResponse.AdminAi ai) {
         User student = s.getStudent();
         List<FileResponse> files = practiceFileRepository.findByPracticeSession_IdAndDeletedFalse(s.getId()).stream()
                 .map(fileMapper::toResponse)
@@ -455,7 +578,8 @@ public class PracticeServiceImpl implements PracticeService {
                 s.getReviewedAt(),
                 s.getCreatedAt(),
                 files,
-                requests);
+                requests,
+                ai);
     }
 
     private ReviewRequestResponse toReviewResponse(PracticeReviewRequest r) {

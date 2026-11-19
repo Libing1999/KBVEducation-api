@@ -59,6 +59,10 @@ public class User extends BaseEntity {
     @Column(name = "locked_until")
     private Instant lockedUntil;
 
+    /** Students only (e.g. "S-0007"): the only name the AI ever sees for this student. Set at onboarding. */
+    @Column(name = "code_name", length = 20)
+    private String codeName;
+
     public String getFullName() {
         return firstName + " " + lastName;
     }

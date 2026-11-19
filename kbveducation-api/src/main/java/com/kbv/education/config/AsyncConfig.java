@@ -24,4 +24,19 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    /**
+     * AI work started by the admin ("Run now", "Analyse again"). One thread: AI runs never
+     * overlap, and a click returns at once instead of waiting for the AI to answer.
+     */
+    @Bean(name = "aiExecutor")
+    public ThreadPoolTaskExecutor aiExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix("ai-");
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(1);
+        executor.setQueueCapacity(500);
+        executor.initialize();
+        return executor;
+    }
 }
